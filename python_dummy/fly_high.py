@@ -1,14 +1,9 @@
-# Python client example to get Lidar data from a drone
-#
-
-import setup_path 
+import setup_path
 import airsim
 
 import sys
-import math
 import time
 import argparse
-import pprint
 import numpy
 from numpy import linalg as LA
 
@@ -27,45 +22,47 @@ class LidarTest:
         print("arming the drone...")
         self.client.armDisarm(True)
 
-        # state = self.client.getMultirotorState()
-        # s = pprint.pformat(state)
-        # #print("state: %s" % s)
-
         airsim.wait_key('Press any key to takeoff')
         self.client.takeoffAsync().join()
 
-        state = self.client.getMultirotorState()
+        # state = self.client.getMultirotorState()
 
-        airsim.wait_key('Press any key to move vehicle to (-10, 10, -10) at 5 m/s')
-        self.client.moveToPositionAsync(-10, 10, -10, 5).join()
+        # airsim.wait_key('Press any key to move vehicle to (-10, 10, -10) at 5 m/s')
+        # self.client.moveToPositionAsync(-10, 10, -10, 5).join()
 
         airsim.wait_key('Press any key to get Lidar readings')
         
         
-        z = -10
-
+        z_position = -10
+        counter = 0
         
         while(True):
             lidarData = self.client.getLidarData()
             if (len(lidarData.point_cloud) < 3):
-                print("\tNo points received from Lidar data")
-                center_point = points.mean(axis = 0)
-                self.client.moveToPositionAsync(lidarData.pose.position.x_val+center_point[0], lidarData.pose.position.y_val+center_point[1], lidarData.pose.position.z_val, 5).join()
-                break
+                counter+=1
+                if len(points) > 10:
+                    pre_points = points
+                
+                if counter > 3:
+                    # print("\tNo points received from Lidar data")
+                    center_point = pre_points.mean(axis = 0)
+
+                    self.client.moveToPositionAsync(lidarData.pose.position.x_val+center_point[0], 
+                                                    lidarData.pose.position.y_val+center_point[1], 
+                                                    lidarData.pose.position.z_val,
+                                                    5).join()
+                    # self.client.moveOnPathAsync([airsim.Vector3r(lidarData.pose.position.x_val+center_point[0], 
+                    #             lidarData.pose.position.y_val+center_point[1], lidarData.pose.position.z_val-center_point[2]-2)],
+                    #     4).join()
+                    airsim.wait_key("press any key to land")
+                    self.client.landAsync().join()
+                    break
             else:
                 points = self.parse_lidarData(lidarData)
-                z-=0.5
-                self.client.moveToPositionAsync(-10, 10, z, 5).join()
+                z_position-=0.4
+                self.client.moveToPositionAsync(lidarData.pose.position.x_val, lidarData.pose.position.y_val, z_position, 5).join()
                 
-                
-                # print distance
-                temp = points[:,0:2]
-                distance = LA.norm(temp, axis=1)
-                # print(distance)
-                # print("{} points".format(len(distance)))
-                print(points)
-                #print("\t\tlidar orientation:\n %s" % (pprint.pformat(lidarData.pose.orientation)))
-            time.sleep(0.05)
+            time.sleep(0.025)
 
 
     def parse_lidarData(self, data):
@@ -75,10 +72,6 @@ class LidarTest:
         points = numpy.reshape(points, (int(points.shape[0]/3), 3))
        
         return points
-
-    def write_lidarData_to_disk(self, points):
-        # TODO
-        print("not yet implemented")
 
     def stop(self):
 
