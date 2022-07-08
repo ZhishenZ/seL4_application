@@ -1,0 +1,18 @@
+/*
+* Copyright (C) 2021, HENSOLDT Cyber GmbH
+*/
+import <if_OS_Storage.camkes>;
+#include <if_OS_Socket.camkes>
+
+component TestApp {
+    control;
+    // For underlying storage - partition 1
+    uses if_OS_Storage storage_rpc_1;
+    dataport Buf storage_dp_1;
+    // For underlying storage - partition 2
+    uses if_OS_Storage storage_rpc_2;
+    dataport Buf storage_dp_2;
+
+    // Networking
+    IF_OS_SOCKET_USE(networkStack)
+}

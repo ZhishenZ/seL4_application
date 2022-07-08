@@ -1,0 +1,26 @@
+/*
+* RPi3 board configuration
+*
+* Copyright (C) 2021, HENSOLDT Cyber GmbH
+*/
+#pragma once
+
+#include "NIC_RPi/NIC_RPi.camkes"
+
+NIC_RPi_Mailbox_COMPONENT_DEFINE(NIC_RPi_Mailbox)
+NIC_RPi_USB_COMPONENT_DEFINE(NIC_RPi_USB)
+NIC_RPi_COMPONENT_DEFINE(NIC_RPi, NIC_DRIVER_RINGBUFFER_SIZE)
+// Create a RPi3 NIC driver instance.
+#define EXERCISE_DEMO_NIC_INSTANCE(_nic_) \
+    component NIC_RPi _nic_; \
+    component NIC_RPi_Mailbox nic_mailbox; \
+    component NIC_RPi_USB nic_usb; \
+    NIC_RPi_INSTANCE_CONNECT(_nic_, nic_mailbox, nic_usb)
+#define EXERCISE_DEMO_NIC_CONNECTION_TIMESERVER(_nic_) \
+        _nic_.timeServer_rpc, _nic_.timeServer_notify,
+#define EXERCISE_DEMO_NIC_TIMESERVER_CLIENTS(_nic_) \
+        _nic_.timeServer_rpc,
+#define EXERCISE_DEMO_NIC_CONFIG(_nic_) \
+    NIC_RPi_Mailbox_INSTANCE_CONFIGURE_SELF(nic_mailbox) \
+    NIC_RPi_USB_INSTANCE_CONFIGURE_SELF(nic_usb) \
+    NIC_RPi_INSTANCE_CONFIGURE(_nic_, 40*4096)

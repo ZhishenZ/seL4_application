@@ -1,0 +1,128 @@
+/*
+* Main CAmkES configuration file of the exercise demo application.
+*
+* Copyright (C) 2021, HENSOLDT Cyber GmbH
+*/
+import <std_connector.camkes>;
+#include "system_config.h"
+#include "plat_nic.camkes"
+//----------------------------------------------------------------------
+// Storage
+//----------------------------------------------------------------------
+// #include "RamDisk/RamDisk.camkes"
+// RamDisk_COMPONENT_DEFINE(RamDisk)
+#include "StorageServer/camkes/StorageServer.camkes"
+StorageServer_COMPONENT_DEFINE(StorageServer)
+
+#include "RPi_SPI_Flash/RPi_SPI_Flash.camkes"
+RPi_SPI_Flash_COMPONENT_DEFINE(RPi_SPI_Flash)
+RPi_SPI_Flash_HW_COMPONENT_DEFINE(RPi_SPI_Flash_HW)
+
+#include "TimeServer/camkes/TimeServer.camkes"
+TimeServer_COMPONENT_DEFINE(TimeServer)
+
+#include "NetworkStack_PicoTcp/camkes/NetworkStack_PicoTcp.camkes"
+NetworkStack_PicoTcp_COMPONENT_DEFINE(
+    NetworkStack_PicoTcp,
+    NIC_DRIVER_RINGBUFFER_SIZE,
+    NetworkStack_PicoTcp_NO_ADDITIONAL_INTERFACES)
+
+#include "components/TestApp/TestApp.camkes"
+//----------------------------------------------------------------------
+// System
+//----------------------------------------------------------------------
+assembly {
+    composition {
+
+        component RPi_SPI_Flash  spi_flash;
+        component RPi_SPI_Flash_HW  spi_flash_HW;
+        //----------------------------------------------------------------------
+        // StorageServer
+        //----------------------------------------------------------------------
+        component StorageServer storageServer;
+        component TimeServer timeServer;
+        component TestApp testApp;
+
+        // connect 
+        RPi_SPI_Flash_INSTANCE_CONNECT(
+            spi_flash,
+            spi_flash_HW
+        )
+
+        StorageServer_INSTANCE_CONNECT(
+            storageServer,
+            spi_flash.storage_rpc, spi_flash.storage_port
+        )
+        StorageServer_INSTANCE_CONNECT_CLIENTS(
+            storageServer,
+            testApp.storage_rpc_1, testApp.storage_dp_1,
+            testApp.storage_rpc_2, testApp.storage_dp_2
+        )
+
+        TimeServer_INSTANCE_CONNECT_CLIENTS(
+            timeServer,
+            spi_flash.timeServer_rpc, spi_flash.timeServer_notify,
+            EXERCISE_DEMO_NIC_CONNECTION_TIMESERVER(nwDriver)
+            nwStack.timeServer_rpc, nwStack.timeServer_notify
+        )
+
+        //----------------------------------------------------------------------
+        // Network Driver
+        //----------------------------------------------------------------------
+        EXERCISE_DEMO_NIC_INSTANCE(nwDriver)
+
+        //----------------------------------------------------------------------
+        // Network Stack
+        //----------------------------------------------------------------------
+        component NetworkStack_PicoTcp nwStack;
+        NetworkStack_PicoTcp_INSTANCE_CONNECT(
+            nwStack,
+            nwDriver
+        )
+
+        NetworkStack_PicoTcp_INSTANCE_CONNECT_CLIENTS(
+            nwStack,
+            testApp, networkStack
+        )
+
+
+
+
+
+}
+    configuration {
+        // ramDisk.storage_size = 2 * 1024 * 1024;S
+
+        StorageServer_INSTANCE_CONFIGURE_CLIENTS(
+            storageServer,
+            FILESYSTEM_1_STORAGE_OFFSET, FILESYSTEM_1_STORAGE_SIZE,
+            FILESYSTEM_2_STORAGE_OFFSET, FILESYSTEM_2_STORAGE_SIZE
+        )
+        StorageServer_CLIENT_ASSIGN_BADGES(
+            testApp.storage_rpc_1,
+            testApp.storage_rpc_2
+
+        )
+
+        RPi_SPI_Flash_HW_INSTANCE_CONFIGURE_SELF(
+            spi_flash_HW
+        )
+
+        TimeServer_CLIENT_ASSIGN_BADGES(
+            spi_flash.timeServer_rpc,
+            EXERCISE_DEMO_NIC_TIMESERVER_CLIENTS(nwDriver)
+            nwStack.timeServer_rpc
+        )
+
+        EXERCISE_DEMO_NIC_CONFIG(nwDriver)
+
+        NetworkStack_PicoTcp_CLIENT_ASSIGN_BADGES(
+            testApp, networkStack
+        )
+        NetworkStack_PicoTcp_INSTANCE_CONFIGURE_CLIENTS(
+            nwStack,
+            2
+        )
+            
+    }
+}
