@@ -370,16 +370,20 @@ int run()
     size_t actualLenRecv = 0;
     char very_long_tmp[0xffff];
     int string_good = 1;
+    int counter = 0;
 
     // ret = OS_ERROR_TRY_AGAIN;
 
     // while ( ret == OS_ERROR_TRY_AGAIN)
     // {
 
-    int counter = 0;
-
     while (1)
-    {
+    {   
+        /* have to delete this later #
+           change to some signal from the fly_high.py*/
+        if(counter > 5) break;
+
+
         while (string_good)
         {
             ret = OS_Socket_read(
@@ -388,8 +392,8 @@ int run()
                 sizeof(receivedData),
                 &actualLenRecv);
 
-            Debug_LOG_INFO("string_good--------------------------------ret:%d", ret);
-            Debug_LOG_INFO("fileData[actualLenRecv - 1]:%d", fileData[actualLenRecv - 1]);
+            // Debug_LOG_INFO("string_good--------------------------------ret:%d", ret);
+            // Debug_LOG_INFO("fileData[actualLenRecv - 1]:%d", fileData[actualLenRecv - 1]);
             Debug_LOG_INFO("actualLenRecv:%d", actualLenRecv);
             memcpy(fileData, receivedData, sizeof(fileData));
             strcat(very_long_tmp, fileData);
@@ -397,71 +401,93 @@ int run()
             {
 
                 string_good = 0;
-                Debug_LOG_INFO("Got HTTP Page:\n%s\r\n", very_long_tmp);
+                /* counter has to be deleted. */
+                counter++;
             }
-        }
-
-        // send data
-
-        ret = OS_Socket_write(hServer, request, to_write, &actualLen);
-
-        // string_good is 1
-        string_good = 1;
-        strcpy(very_long_tmp, "");
-        strcpy(fileData, "");
-        memset(receivedData, 0, sizeof(receivedData));
-        counter++;
-
-        if (counter > 1)
-            break;
+            memset(receivedData, 0, sizeof(receivedData));
         }
         // }
 
         Debug_LOG_INFO("Got HTTP Page:\n%s\r\n", very_long_tmp);
 
-        // ret = OS_Socket_read(
-        //     hServer,
-        //     receivedData,
-        //     sizeof(receivedData),
-        //     &actualLenRecv);
+        do
+        {
+            seL4_Yield();
+            ret = OS_Socket_write(hServer, request, to_write, &actualLen);
+        } while (ret == OS_ERROR_WOULD_BLOCK);
 
-        // Debug_LOG_INFO(
-        //     "OS_Socket_read() received %zu bytes of data",
-        //     actualLenRecv);
-
-        // memcpy(fileData, receivedData, sizeof(fileData));
-        // Debug_LOG_INFO("Got HTTP Page:\n%s\r\n", fileData);
-
-        // printf("Last char of data :fileData[actualLenRecv-0] %c\n", fileData[actualLenRecv - 0]);
-        // printf("Last char of data :fileData[actualLenRecv-1] %c\n", fileData[actualLenRecv - 1]);
-        // printf("Last char of data :fileData[actualLenRecv-2] %c\n", fileData[actualLenRecv - 2]);
-        // printf("Last char of data :fileData[actualLenRecv-3] %c\n", fileData[actualLenRecv - 3]);
-
-        // ret = OS_Socket_read(
-        //     hServer,
-        //     receivedData,
-        //     sizeof(receivedData),
-        //     &actualLenRecv);
-
-        // Debug_LOG_INFO(
-        //     "OS_Socket_read() received %zu bytes of data",
-        //     actualLenRecv);
-
-        // memcpy(fileData, receivedData, sizeof(fileData));
-        // Debug_LOG_INFO("Got HTTP Page:\n%s\r\n", fileData);
-
-        // printf("Last char of data :fileData[actualLenRecv-0] %c\n", fileData[actualLenRecv - 0]);
-        // printf("Last char of data :fileData[actualLenRecv-1] %c\n", fileData[actualLenRecv - 1]);
-        // printf("Last char of data :fileData[actualLenRecv-2] %c\n", fileData[actualLenRecv - 2]);
-        // printf("Last char of data :fileData[actualLenRecv-3] %c\n", fileData[actualLenRecv - 3]);
-
-        OS_Socket_close(hServer);
-
-        // ----------------------------------------------------------------------
-        // Storage Test
-        // ----------------------------------------------------------------------
-        test_OS_FileSystem(&spiffsCfg_1);
-        test_OS_FileSystem(&spiffsCfg_2);
-        Debug_LOG_INFO("Demo completed successfully.");
-        return 0;
+        strcpy(very_long_tmp, "");
+        string_good = 1;
+        actualLenRecv = 0;
+        memset(receivedData, 0, sizeof(receivedData));
     }
+
+    // while (string_good)
+    // {
+    //     ret = OS_Socket_read(
+    //         hServer,
+    //         receivedData,
+    //         sizeof(receivedData),
+    //         &actualLenRecv);
+
+    //     // Debug_LOG_INFO("string_good--------------------------------ret:%d", ret);
+    //     // Debug_LOG_INFO("fileData[actualLenRecv - 1]:%d", fileData[actualLenRecv - 1]);
+    //     Debug_LOG_INFO("actualLenRecv:%d", actualLenRecv);
+    //     memcpy(fileData, receivedData, sizeof(fileData));
+    //     strcat(very_long_tmp, fileData);
+    //     if (fileData[actualLenRecv - 1] == '\0' && actualLenRecv)
+    //     {
+
+    //         string_good = 0;
+    //     }
+    //      memset(receivedData, 0, sizeof(receivedData));
+    // }
+
+    //  Debug_LOG_INFO("Got HTTP Page:\n%s\r\n", very_long_tmp);
+
+    // ret = OS_Socket_read(
+    //     hServer,
+    //     receivedData,
+    //     sizeof(receivedData),
+    //     &actualLenRecv);
+
+    // Debug_LOG_INFO(
+    //     "OS_Socket_read() received %zu bytes of data",
+    //     actualLenRecv);
+
+    // memcpy(fileData, receivedData, sizeof(fileData));
+    // Debug_LOG_INFO("Got HTTP Page:\n%s\r\n", fileData);
+
+    // printf("Last char of data :fileData[actualLenRecv-0] %c\n", fileData[actualLenRecv - 0]);
+    // printf("Last char of data :fileData[actualLenRecv-1] %c\n", fileData[actualLenRecv - 1]);
+    // printf("Last char of data :fileData[actualLenRecv-2] %c\n", fileData[actualLenRecv - 2]);
+    // printf("Last char of data :fileData[actualLenRecv-3] %c\n", fileData[actualLenRecv - 3]);
+
+    // ret = OS_Socket_read(
+    //     hServer,
+    //     receivedData,
+    //     sizeof(receivedData),
+    //     &actualLenRecv);
+
+    // Debug_LOG_INFO(
+    //     "OS_Socket_read() received %zu bytes of data",
+    //     actualLenRecv);
+
+    // memcpy(fileData, receivedData, sizeof(fileData));
+    // Debug_LOG_INFO("Got HTTP Page:\n%s\r\n", fileData);
+
+    // printf("Last char of data :fileData[actualLenRecv-0] %c\n", fileData[actualLenRecv - 0]);
+    // printf("Last char of data :fileData[actualLenRecv-1] %c\n", fileData[actualLenRecv - 1]);
+    // printf("Last char of data :fileData[actualLenRecv-2] %c\n", fileData[actualLenRecv - 2]);
+    // printf("Last char of data :fileData[actualLenRecv-3] %c\n", fileData[actualLenRecv - 3]);
+
+    OS_Socket_close(hServer);
+
+    // ----------------------------------------------------------------------
+    // Storage Test
+    // ----------------------------------------------------------------------
+    test_OS_FileSystem(&spiffsCfg_1);
+    test_OS_FileSystem(&spiffsCfg_2);
+    Debug_LOG_INFO("Demo completed successfully.");
+    return 0;
+}
