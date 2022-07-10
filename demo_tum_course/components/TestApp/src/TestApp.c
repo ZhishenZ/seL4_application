@@ -12,7 +12,6 @@
 
 // Assign the RPC endpoint based on the names used by this client
 
-
 static char fileData[4096];
 static const if_OS_Socket_t networkStackCtx = IF_OS_SOCKET_ASSIGN(networkStack);
 //------------------------------------------------------------------------------
@@ -275,7 +274,6 @@ int run()
         return -1;
     }
 
-
     static uint8_t receivedData[OS_DATAPORT_DEFAULT_SIZE];
     Debug_LOG_INFO("OS_DATAPORT_DEFAULT_SIZE %lu", OS_DATAPORT_DEFAULT_SIZE);
 
@@ -315,8 +313,7 @@ int run()
 
     //------------------------------SEND REQUEST TO HOST ENDS ----------------------
 
-    // Loop until an error occurs.
-    // do
+    // Loop until an error occurs.do
     // {
 
     //     size_t actualLenRecv = 0;
@@ -359,22 +356,25 @@ int run()
     //         break;
     //     }
     // } while (ret == OS_ERROR_TRY_AGAIN);
-    Debug_LOG_INFO("STARTS wait for 1 second");
 
+    // Debug_LOG_INFO("STARTS wait for 1 second");
 
-
-    int a = 0;
-    // TimeServer_sleep(&timer, TimerServer_PRECISION_SEC,1);
-    for(int iii = 0; iii<0xfffffff; iii++){
-        a++;
-
-    }
-     Debug_LOG_INFO("ENDS wait for 1 second");
+    // int a = 0;
+    // // TimeServer_sleep(&timer, TimerServer_PRECISION_SEC,1);
+    // for (int iii = 0; iii < 0xfffffff; iii++)
+    // {
+    //     a++;
+    // }
+    // Debug_LOG_INFO("ENDS wait for 1 second");
 
     size_t actualLenRecv = 0;
     char very_long_tmp[0xffff];
     int string_good = 1;
 
+    // ret = OS_ERROR_TRY_AGAIN;
+
+    // while ( ret == OS_ERROR_TRY_AGAIN)
+    // {
     while (string_good)
     {
         ret = OS_Socket_read(
@@ -382,19 +382,21 @@ int run()
             receivedData,
             sizeof(receivedData),
             &actualLenRecv);
+
+        Debug_LOG_INFO("string_good--------------------------------ret:%d", ret);
+        Debug_LOG_INFO("fileData[actualLenRecv - 1]:%d", fileData[actualLenRecv - 1]);
+        Debug_LOG_INFO("actualLenRecv:%d", actualLenRecv);
         memcpy(fileData, receivedData, sizeof(fileData));
-        strcat(very_long_tmp,fileData);
-        if(fileData[actualLenRecv-1]=='\0'){
+        strcat(very_long_tmp, fileData);
+        if (fileData[actualLenRecv - 1] == '\0' && actualLenRecv)
+        {
 
             string_good = 0;
         }
-        
     }
-
+    // }
 
     Debug_LOG_INFO("Got HTTP Page:\n%s\r\n", very_long_tmp);
-
-
 
     // ret = OS_Socket_read(
     //     hServer,
