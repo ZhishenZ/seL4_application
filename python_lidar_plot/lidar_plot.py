@@ -159,22 +159,15 @@ plt.scatter(x48,y48)
 
 
 # PLot
+import numpy as np 
+block_heights =  np.array( [[-28.819968532836583, -32.44976846236871, -17.501968383789062, 737], [20.375547346861456, -53.43429063714072, -21.946474075317383, 1472], [31.32179325675042, 2.063768445653616, -26.434057235717773, 3312], [20.954889612197896, 49.452574157714864, -21.946474075317383, 1600], [-21.160597752716573, 22.646073519173317, -12.768880844116211, 944], [-69.73465232849117, -52.44987049102783, -17.305458068847656, 320], [-68.03184692382803, 52.199546813964844, -21.946474075317383, 400]])
+x_block_heights = block_heights[:,0]
+y_block_heights = block_heights[:,1]
+plt.scatter(x_block_heights,y_block_heights,color='green', s = 300)
 
 
+plt.xlabel("x axis") 
+plt.ylabel("y axis") 
 
-
-
-
-
-# Add Title
-
-# plt.title("Matplotlib PLot NumPy Array") 
-
-# # Add Axes Labels
-
-# plt.xlabel("x axis") 
-# plt.ylabel("y axis") 
-
-# Display
 
 plt.show()
