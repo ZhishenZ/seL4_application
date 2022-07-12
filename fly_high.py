@@ -7,6 +7,30 @@ import argparse
 import numpy
 from numpy import linalg as LA
 
+
+
+
+## for the test
+from random import seed
+import signal
+import socket
+from time import sleep
+import numpy as np
+from pyrsistent import s
+np.set_printoptions(suppress=True, threshold = np.inf)
+
+
+
+
+
+
+# file = open(r"lidar_data.txt","w+")
+
+
+
+
+
+
 # Makes the drone fly and get Lidar data
 class LidarTest:
 
@@ -38,6 +62,26 @@ class LidarTest:
         
         while(True):
             lidarData = self.client.getLidarData()
+            
+            # receive from pi
+                # move up
+
+                # action = move up
+
+                # from highest point fly to point to land 
+
+
+            # send to pi do smth 
+
+                # action:
+                    #move up
+
+
+                    # fly to destination 
+
+            
+            
+            
             if (len(lidarData.point_cloud) < 3):
                 counter+=1
                 if len(points) > 10:
@@ -62,7 +106,34 @@ class LidarTest:
                 z_position-=0.4
                 self.client.moveToPositionAsync(lidarData.pose.position.x_val, lidarData.pose.position.y_val, z_position, 5).join()
                 
+            
+            
+            
+                        
+            ## TODO
+            data = conn.recv(1024)
+    
+            if not data: 
+                print("connection drop...")
+                break
+            print("recv:",data)
+
+            data_str = str(np.around(points,6))
+            data_str += "\0"
+            print("Print the lidar data\n",data_str)
+            # file.write(data_str)
+            conn.send(data_str.encode())
+
             time.sleep(0.025)
+            
+            
+            
+            
+            
+            
+            
+            
+            
 
 
     def parse_lidarData(self, data):
@@ -85,6 +156,19 @@ class LidarTest:
 
 # main
 if __name__ == "__main__":
+    
+    ## TODO socket starts
+    server = socket.socket()
+    server.bind(("10.0.0.10",8888)) 
+    server.listen(5) 
+    print("start waiting")
+    conn, addr = server.accept()
+    print(conn, addr)
+    print("server connected")
+    ## TODO socket ends
+    
+    
+    
     args = sys.argv
     args.pop(0)
 

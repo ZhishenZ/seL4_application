@@ -381,7 +381,7 @@ int run()
     {   
         /* have to delete this later #
            change to some signal from the fly_high.py*/
-        if(counter > 5) break;
+        if(counter > 100) break;
 
 
         while (string_good)
