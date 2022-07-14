@@ -120,7 +120,11 @@ class LidarTest:
 
             data_str = str(np.around(points,6))
             data_str += "\0"
-            print("Print the lidar data\n",data_str)
+            # TODO uncomment this later
+            # print("Print the lidar data\n",data_str)
+            
+            print("The lidar data length is {}\n".format(len(points)))
+            
             # file.write(data_str)
             conn.send(data_str.encode())
 

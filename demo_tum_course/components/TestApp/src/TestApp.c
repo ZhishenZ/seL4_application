@@ -12,8 +12,12 @@
 
 // Assign the RPC endpoint based on the names used by this client
 
+#define NOT_A_NUM (__builtin_nanf (""))
+
 static char fileData[4096];
 static const if_OS_Socket_t networkStackCtx = IF_OS_SOCKET_ASSIGN(networkStack);
+
+
 //------------------------------------------------------------------------------
 static OS_FileSystem_Config_t spiffsCfg_1 =
     {
@@ -236,11 +240,31 @@ waitForIncomingConnection(
     return ret;
 }
 
+
+int tokenize_string(char str[], char delimiters[], double tokens[][3])
+{
+
+    char *p = str;
+    int i;
+    for (i = 0; p /*if ptr not a null*/; i++)
+    {
+
+        p = strtok(i == 0 ? str : NULL, delimiters); //only the first call pass str
+        tokens[i/3][i%3] = (p) ? atof(p) : NOT_A_NUM;
+        
+    }
+
+    return i/3;
+
+}
+
+
+
 //------------------------------------------------------------------------------
 
 int run()
 {
-    Debug_LOG_INFO("Starting test_app_server...");
+    printf("Starting test_app_server...");
     // Check and wait until the NetworkStack component is up and running.
     OS_Error_t ret = waitForNetworkStackInit(&networkStackCtx);
     if (OS_SUCCESS != ret)
@@ -275,7 +299,7 @@ int run()
     }
 
     static uint8_t receivedData[OS_DATAPORT_DEFAULT_SIZE];
-    Debug_LOG_INFO("OS_DATAPORT_DEFAULT_SIZE %lu", OS_DATAPORT_DEFAULT_SIZE);
+    printf("OS_DATAPORT_DEFAULT_SIZE %lu", OS_DATAPORT_DEFAULT_SIZE);
 
     do
     {
@@ -292,7 +316,7 @@ int run()
     //------------------------------Connect establishing ENDS ----------------------
 
     //------------------------------SEND REQUEST TO HOST STARTS ----------------------
-    Debug_LOG_INFO("Send request to host...");
+    printf("Send request to host...");
     const char request[] =
         "GET / HTTP/1.0\r\nHost:10.0.0.1\r\nConnection: close\r\n";
     size_t actualLen = sizeof(request);
@@ -309,7 +333,7 @@ int run()
         OS_Socket_close(hServer);
         return -1;
     }
-    Debug_LOG_INFO("HTTP request successfully sent");
+    printf("HTTP request successfully sent");
 
     //------------------------------SEND REQUEST TO HOST ENDS ----------------------
 
@@ -325,11 +349,11 @@ int run()
     //     switch (ret)
     //     {
     //     case OS_SUCCESS:
-    //         Debug_LOG_INFO(
+    //         printf(
     //             "OS_Socket_read() received %zu bytes of data",
     //             actualLenRecv);
     //         memcpy(fileData, receivedData, sizeof(fileData));
-    //         Debug_LOG_INFO("Got HTTP Page:\n%s\r\n", fileData);
+    //         printf("Got HTTP Page:\n%s\r\n", fileData);
     //         break;
     //         // size_t lenWritten = 0;
     //         // ret = OS_Socket_write(
@@ -343,7 +367,7 @@ int run()
     //             "OS_Socket_read() reported try again");
     //         continue;
     //     case OS_ERROR_CONNECTION_CLOSED:
-    //         Debug_LOG_INFO(
+    //         printf(
     //             "OS_Socket_read() reported connection closed");
     //         break;
     //     case OS_ERROR_NETWORK_CONN_SHUTDOWN:
@@ -357,7 +381,7 @@ int run()
     //     }
     // } while (ret == OS_ERROR_TRY_AGAIN);
 
-    // Debug_LOG_INFO("STARTS wait for 1 second");
+    // printf("STARTS wait for 1 second");
 
     // int a = 0;
     // // TimeServer_sleep(&timer, TimerServer_PRECISION_SEC,1);
@@ -365,12 +389,14 @@ int run()
     // {
     //     a++;
     // }
-    // Debug_LOG_INFO("ENDS wait for 1 second");
+    // printf("ENDS wait for 1 second");
 
     size_t actualLenRecv = 0;
     char very_long_tmp[0xffff];
     int string_good = 1;
     int counter = 0;
+    double lidar_points[500][3];
+    int lidar_points_len;
 
     // ret = OS_ERROR_TRY_AGAIN;
 
@@ -392,23 +418,36 @@ int run()
                 sizeof(receivedData),
                 &actualLenRecv);
 
-            // Debug_LOG_INFO("string_good--------------------------------ret:%d", ret);
-            // Debug_LOG_INFO("fileData[actualLenRecv - 1]:%d", fileData[actualLenRecv - 1]);
-            Debug_LOG_INFO("actualLenRecv:%d", actualLenRecv);
+            /**
+             * @todo uncomment these if we want to use DEBUGLOGINFO
+             * 
+             */
+            // printf("string_good--------------------------------ret:%d", ret);
+            // printf("fileData[actualLenRecv - 1]:%d", fileData[actualLenRecv - 1]);
+            // printf("actualLenRecv:%d", actualLenRecv);
+
             memcpy(fileData, receivedData, sizeof(fileData));
             strcat(very_long_tmp, fileData);
             if (fileData[actualLenRecv - 1] == '\0' && actualLenRecv)
             {
 
                 string_good = 0;
-                /* counter has to be deleted. */
+                /**
+                 * @todo
+                 * counter has to be deleted. */
                 counter++;
             }
             memset(receivedData, 0, sizeof(receivedData));
         }
         // }
-
-        Debug_LOG_INFO("Got HTTP Page:\n%s\r\n", very_long_tmp);
+        lidar_points_len = tokenize_string(very_long_tmp, " ,[]\n", lidar_points);
+        printf("The lidar data length is:\n%d\r\n", lidar_points_len);
+        // printf("Got HTTP Page:\n%s\r\n", very_long_tmp);
+        
+        // print the data in c array
+        // for(int i = 0; i< lidar_points_len; i++){
+        //     printf("lidar_points[%d][0], lidar_points[%d][1], lidar_points[%d][2]: %f, %f, %f\n",i,i,i,lidar_points[i][0],lidar_points[i][1],lidar_points[i][2]);
+        // }
 
         do
         {
@@ -430,9 +469,9 @@ int run()
     //         sizeof(receivedData),
     //         &actualLenRecv);
 
-    //     // Debug_LOG_INFO("string_good--------------------------------ret:%d", ret);
-    //     // Debug_LOG_INFO("fileData[actualLenRecv - 1]:%d", fileData[actualLenRecv - 1]);
-    //     Debug_LOG_INFO("actualLenRecv:%d", actualLenRecv);
+    //     // printf("string_good--------------------------------ret:%d", ret);
+    //     // printf("fileData[actualLenRecv - 1]:%d", fileData[actualLenRecv - 1]);
+    //     printf("actualLenRecv:%d", actualLenRecv);
     //     memcpy(fileData, receivedData, sizeof(fileData));
     //     strcat(very_long_tmp, fileData);
     //     if (fileData[actualLenRecv - 1] == '\0' && actualLenRecv)
@@ -443,7 +482,7 @@ int run()
     //      memset(receivedData, 0, sizeof(receivedData));
     // }
 
-    //  Debug_LOG_INFO("Got HTTP Page:\n%s\r\n", very_long_tmp);
+    //  printf("Got HTTP Page:\n%s\r\n", very_long_tmp);
 
     // ret = OS_Socket_read(
     //     hServer,
@@ -451,12 +490,12 @@ int run()
     //     sizeof(receivedData),
     //     &actualLenRecv);
 
-    // Debug_LOG_INFO(
+    // printf(
     //     "OS_Socket_read() received %zu bytes of data",
     //     actualLenRecv);
 
     // memcpy(fileData, receivedData, sizeof(fileData));
-    // Debug_LOG_INFO("Got HTTP Page:\n%s\r\n", fileData);
+    // printf("Got HTTP Page:\n%s\r\n", fileData);
 
     // printf("Last char of data :fileData[actualLenRecv-0] %c\n", fileData[actualLenRecv - 0]);
     // printf("Last char of data :fileData[actualLenRecv-1] %c\n", fileData[actualLenRecv - 1]);
@@ -469,12 +508,12 @@ int run()
     //     sizeof(receivedData),
     //     &actualLenRecv);
 
-    // Debug_LOG_INFO(
+    // printf(
     //     "OS_Socket_read() received %zu bytes of data",
     //     actualLenRecv);
 
     // memcpy(fileData, receivedData, sizeof(fileData));
-    // Debug_LOG_INFO("Got HTTP Page:\n%s\r\n", fileData);
+    // printf("Got HTTP Page:\n%s\r\n", fileData);
 
     // printf("Last char of data :fileData[actualLenRecv-0] %c\n", fileData[actualLenRecv - 0]);
     // printf("Last char of data :fileData[actualLenRecv-1] %c\n", fileData[actualLenRecv - 1]);
@@ -488,6 +527,6 @@ int run()
     // ----------------------------------------------------------------------
     test_OS_FileSystem(&spiffsCfg_1);
     test_OS_FileSystem(&spiffsCfg_2);
-    Debug_LOG_INFO("Demo completed successfully.");
+    printf("Demo completed successfully.");
     return 0;
 }
