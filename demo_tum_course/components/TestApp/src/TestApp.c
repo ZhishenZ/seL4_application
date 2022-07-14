@@ -12,11 +12,10 @@
 
 // Assign the RPC endpoint based on the names used by this client
 
-#define NOT_A_NUM (__builtin_nanf (""))
+#define NOT_A_NUM (__builtin_nanf(""))
 
 static char fileData[4096];
 static const if_OS_Socket_t networkStackCtx = IF_OS_SOCKET_ASSIGN(networkStack);
-
 
 //------------------------------------------------------------------------------
 static OS_FileSystem_Config_t spiffsCfg_1 =
@@ -240,7 +239,6 @@ waitForIncomingConnection(
     return ret;
 }
 
-
 int tokenize_string(char str[], char delimiters[], double tokens[][3])
 {
 
@@ -249,16 +247,12 @@ int tokenize_string(char str[], char delimiters[], double tokens[][3])
     for (i = 0; p /*if ptr not a null*/; i++)
     {
 
-        p = strtok(i == 0 ? str : NULL, delimiters); //only the first call pass str
-        tokens[i/3][i%3] = (p) ? atof(p) : NOT_A_NUM;
-        
+        p = strtok(i == 0 ? str : NULL, delimiters); // only the first call pass str
+        tokens[i / 3][i % 3] = (p) ? atof(p) : NOT_A_NUM;
     }
 
-    return i/3;
-
+    return i / 3;
 }
-
-
 
 //------------------------------------------------------------------------------
 
@@ -321,6 +315,15 @@ int run()
         "GET / HTTP/1.0\r\nHost:10.0.0.1\r\nConnection: close\r\n";
     size_t actualLen = sizeof(request);
     size_t to_write = strlen(request);
+
+    const char request_up[] = "UP\r\n";
+    size_t actualLen_up = sizeof(request_up);
+    size_t to_write_up = strlen(request_up);
+
+    const char request_land[] = "LAND\r\n";
+    size_t actualLen_land = sizeof(request_land);
+    size_t to_write_land = strlen(request_land);
+
     do
     {
         seL4_Yield();
@@ -335,62 +338,6 @@ int run()
     }
     printf("HTTP request successfully sent");
 
-    //------------------------------SEND REQUEST TO HOST ENDS ----------------------
-
-    // Loop until an error occurs.do
-    // {
-
-    //     size_t actualLenRecv = 0;
-    //     ret = OS_Socket_read(
-    //         hServer,
-    //         receivedData,
-    //         sizeof(receivedData),
-    //         &actualLenRecv);
-    //     switch (ret)
-    //     {
-    //     case OS_SUCCESS:
-    //         printf(
-    //             "OS_Socket_read() received %zu bytes of data",
-    //             actualLenRecv);
-    //         memcpy(fileData, receivedData, sizeof(fileData));
-    //         printf("Got HTTP Page:\n%s\r\n", fileData);
-    //         break;
-    //         // size_t lenWritten = 0;
-    //         // ret = OS_Socket_write(
-    //         //     hServer,
-    //         //     receivedData,
-    //         //     sizeof(fileData),
-    //         //     &lenWritten);
-    //         // continue;
-    //     case OS_ERROR_TRY_AGAIN:
-    //         Debug_LOG_TRACE(
-    //             "OS_Socket_read() reported try again");
-    //         continue;
-    //     case OS_ERROR_CONNECTION_CLOSED:
-    //         printf(
-    //             "OS_Socket_read() reported connection closed");
-    //         break;
-    //     case OS_ERROR_NETWORK_CONN_SHUTDOWN:
-    //         Debug_LOG_DEBUG(
-    //             "OS_Socket_read() reported connection closed");
-    //         break;
-    //     default:
-    //         Debug_LOG_ERROR(
-    //             "OS_Socket_read() failed, error %d", ret);
-    //         break;
-    //     }
-    // } while (ret == OS_ERROR_TRY_AGAIN);
-
-    // printf("STARTS wait for 1 second");
-
-    // int a = 0;
-    // // TimeServer_sleep(&timer, TimerServer_PRECISION_SEC,1);
-    // for (int iii = 0; iii < 0xfffffff; iii++)
-    // {
-    //     a++;
-    // }
-    // printf("ENDS wait for 1 second");
-
     size_t actualLenRecv = 0;
     char very_long_tmp[0xffff];
     int string_good = 1;
@@ -398,17 +345,8 @@ int run()
     double lidar_points[500][3];
     int lidar_points_len;
 
-    // ret = OS_ERROR_TRY_AGAIN;
-
-    // while ( ret == OS_ERROR_TRY_AGAIN)
-    // {
-
     while (1)
-    {   
-        /* have to delete this later #
-           change to some signal from the fly_high.py*/
-        if(counter > 100) break;
-
+    {
 
         while (string_good)
         {
@@ -419,106 +357,67 @@ int run()
                 &actualLenRecv);
 
             /**
-             * @todo uncomment these if we want to use DEBUGLOGINFO
-             * 
+             * @todo uncomment these if we want to use Debug_LOG_INFO
+             *
              */
-            // printf("string_good--------------------------------ret:%d", ret);
-            // printf("fileData[actualLenRecv - 1]:%d", fileData[actualLenRecv - 1]);
-            // printf("actualLenRecv:%d", actualLenRecv);
+            // Debug_LOG_INFO("string_good--------------------------------ret:%d", ret);
+            // Debug_LOG_INFO("fileData[actualLenRecv - 1]:%d", fileData[actualLenRecv - 1]);
+            // Debug_LOG_INFO("actualLenRecv:%d", actualLenRecv);
 
             memcpy(fileData, receivedData, sizeof(fileData));
             strcat(very_long_tmp, fileData);
             if (fileData[actualLenRecv - 1] == '\0' && actualLenRecv)
             {
-
                 string_good = 0;
-                /**
-                 * @todo
-                 * counter has to be deleted. */
-                counter++;
             }
             memset(receivedData, 0, sizeof(receivedData));
         }
-        // }
-        lidar_points_len = tokenize_string(very_long_tmp, " ,[]\n", lidar_points);
-        printf("The lidar data length is:\n%d\r\n", lidar_points_len);
-        // printf("Got HTTP Page:\n%s\r\n", very_long_tmp);
-        
-        // print the data in c array
-        // for(int i = 0; i< lidar_points_len; i++){
-        //     printf("lidar_points[%d][0], lidar_points[%d][1], lidar_points[%d][2]: %f, %f, %f\n",i,i,i,lidar_points[i][0],lidar_points[i][1],lidar_points[i][2]);
-        // }
 
-        do
+        lidar_points_len = tokenize_string(very_long_tmp, " ,[]\n", lidar_points);
+        printf("The lidar data length is: %d\r\n", lidar_points_len);
+        // printf("Got HTTP Page:\n%s\r\n", very_long_tmp);
+
+        if (lidar_points_len == 0)
         {
-            seL4_Yield();
-            ret = OS_Socket_write(hServer, request, to_write, &actualLen);
-        } while (ret == OS_ERROR_WOULD_BLOCK);
+            counter++;
+        }
+
+        /*If we know there are three times that the lidar points are zero,
+          we confirm that there is no obstacles in the near
+        */
+
+        if (counter > 3)
+        {
+            printf("Fly to Destination and landing\r\n");
+            do
+            {
+                seL4_Yield();
+                ret = OS_Socket_write(hServer, request_land, to_write_land, &actualLen_land);
+            } while (ret == OS_ERROR_WOULD_BLOCK);
+
+             /**
+             * @todo the break should be changed to something else later
+             *
+             */
+            break;
+        }
+        else
+        { /*else fly in vertical direction*/
+            printf("Fly in vertical direction\r\n");
+            do
+            {
+                seL4_Yield();
+                ret = OS_Socket_write(hServer, request_up, to_write_up, &actualLen_up);
+            } while (ret == OS_ERROR_WOULD_BLOCK);
+
+           
+        }
 
         strcpy(very_long_tmp, "");
         string_good = 1;
         actualLenRecv = 0;
         memset(receivedData, 0, sizeof(receivedData));
     }
-
-    // while (string_good)
-    // {
-    //     ret = OS_Socket_read(
-    //         hServer,
-    //         receivedData,
-    //         sizeof(receivedData),
-    //         &actualLenRecv);
-
-    //     // printf("string_good--------------------------------ret:%d", ret);
-    //     // printf("fileData[actualLenRecv - 1]:%d", fileData[actualLenRecv - 1]);
-    //     printf("actualLenRecv:%d", actualLenRecv);
-    //     memcpy(fileData, receivedData, sizeof(fileData));
-    //     strcat(very_long_tmp, fileData);
-    //     if (fileData[actualLenRecv - 1] == '\0' && actualLenRecv)
-    //     {
-
-    //         string_good = 0;
-    //     }
-    //      memset(receivedData, 0, sizeof(receivedData));
-    // }
-
-    //  printf("Got HTTP Page:\n%s\r\n", very_long_tmp);
-
-    // ret = OS_Socket_read(
-    //     hServer,
-    //     receivedData,
-    //     sizeof(receivedData),
-    //     &actualLenRecv);
-
-    // printf(
-    //     "OS_Socket_read() received %zu bytes of data",
-    //     actualLenRecv);
-
-    // memcpy(fileData, receivedData, sizeof(fileData));
-    // printf("Got HTTP Page:\n%s\r\n", fileData);
-
-    // printf("Last char of data :fileData[actualLenRecv-0] %c\n", fileData[actualLenRecv - 0]);
-    // printf("Last char of data :fileData[actualLenRecv-1] %c\n", fileData[actualLenRecv - 1]);
-    // printf("Last char of data :fileData[actualLenRecv-2] %c\n", fileData[actualLenRecv - 2]);
-    // printf("Last char of data :fileData[actualLenRecv-3] %c\n", fileData[actualLenRecv - 3]);
-
-    // ret = OS_Socket_read(
-    //     hServer,
-    //     receivedData,
-    //     sizeof(receivedData),
-    //     &actualLenRecv);
-
-    // printf(
-    //     "OS_Socket_read() received %zu bytes of data",
-    //     actualLenRecv);
-
-    // memcpy(fileData, receivedData, sizeof(fileData));
-    // printf("Got HTTP Page:\n%s\r\n", fileData);
-
-    // printf("Last char of data :fileData[actualLenRecv-0] %c\n", fileData[actualLenRecv - 0]);
-    // printf("Last char of data :fileData[actualLenRecv-1] %c\n", fileData[actualLenRecv - 1]);
-    // printf("Last char of data :fileData[actualLenRecv-2] %c\n", fileData[actualLenRecv - 2]);
-    // printf("Last char of data :fileData[actualLenRecv-3] %c\n", fileData[actualLenRecv - 3]);
 
     OS_Socket_close(hServer);
 

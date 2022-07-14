@@ -20,17 +20,6 @@ from pyrsistent import s
 np.set_printoptions(suppress=True, threshold = np.inf)
 
 
-
-
-
-
-# file = open(r"lidar_data.txt","w+")
-
-
-
-
-
-
 # Makes the drone fly and get Lidar data
 class LidarTest:
 
@@ -49,96 +38,64 @@ class LidarTest:
         airsim.wait_key('Press any key to takeoff')
         self.client.takeoffAsync().join()
 
-        # state = self.client.getMultirotorState()
-
-        # airsim.wait_key('Press any key to move vehicle to (-10, 10, -10) at 5 m/s')
-        # self.client.moveToPositionAsync(-10, 10, -10, 5).join()
-
         airsim.wait_key('Press any key to get Lidar readings')
         
         
         z_position = -10
-        counter = 0
         
         while(True):
+            
+            # print("while(True)")
             lidarData = self.client.getLidarData()
-            
-            # receive from pi
-                # move up
 
-                # action = move up
-
-                # from highest point fly to point to land 
-
-
-            # send to pi do smth 
-
-                # action:
-                    #move up
-
-
-                    # fly to destination 
-
-            
-            
-            
-            if (len(lidarData.point_cloud) < 3):
-                counter+=1
-                if len(points) > 10:
-                    pre_points = points
-                
-                if counter > 3:
-                    # print("\tNo points received from Lidar data")
-                    center_point = pre_points.mean(axis = 0)
-
-                    self.client.moveToPositionAsync(lidarData.pose.position.x_val+center_point[0], 
-                                                    lidarData.pose.position.y_val+center_point[1], 
-                                                    lidarData.pose.position.z_val,
-                                                    5).join()
-                    # self.client.moveOnPathAsync([airsim.Vector3r(lidarData.pose.position.x_val+center_point[0], 
-                    #             lidarData.pose.position.y_val+center_point[1], lidarData.pose.position.z_val-center_point[2]-2)],
-                    #     4).join()
-                    airsim.wait_key("press any key to land")
-                    self.client.landAsync().join()
-                    break
-            else:
-                points = self.parse_lidarData(lidarData)
-                z_position-=0.4
-                self.client.moveToPositionAsync(lidarData.pose.position.x_val, lidarData.pose.position.y_val, z_position, 5).join()
-                
-            
-            
-            
-                        
             ## TODO
-            data = conn.recv(1024)
+            data = conn.recv(128)
     
             if not data: 
                 print("connection drop...")
                 break
             print("recv:",data)
 
+            # get the lidar points
+            points = self.parse_lidarData(lidarData)
+
+            # 'U' stands for UP
+            if str(data)[2] == 'U':
+                
+                z_position-=0.4
+                self.client.moveToPositionAsync(lidarData.pose.position.x_val, lidarData.pose.position.y_val, z_position, 5).join()
+            
+                if len(points) > 10:
+                    pre_points = points
+            
+            
+            # 'L' stands for landing
+            elif str(data)[2] == 'L':
+
+                center_point = pre_points.mean(axis = 0)
+
+                self.client.moveToPositionAsync(lidarData.pose.position.x_val+center_point[0], 
+                                                lidarData.pose.position.y_val+center_point[1], 
+                                                lidarData.pose.position.z_val,
+                                                5).join()
+                airsim.wait_key("press any key to land")
+                self.client.landAsync().join()
+                break
+
+            
+            ## cast the lidar points and send data to the raspberry
             data_str = str(np.around(points,6))
             data_str += "\0"
-            # TODO uncomment this later
+            
+            #  uncomment this if print the lidar data
             # print("Print the lidar data\n",data_str)
             
             print("The lidar data length is {}\n".format(len(points)))
-            
-            # file.write(data_str)
             conn.send(data_str.encode())
 
             time.sleep(0.025)
             
             
-            
-            
-            
-            
-            
-            
-            
-
 
     def parse_lidarData(self, data):
 
