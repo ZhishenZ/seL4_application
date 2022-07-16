@@ -302,14 +302,14 @@ int tokenize_string(char str[], char delimiters[], double cloud_points[][3], dou
     }
 
     // pass the value tocurrent position 
-    cur_pos[0] = cloud_points[i / POINT_CLOUD_CLN][0];
-    cur_pos[1] = cloud_points[i / POINT_CLOUD_CLN][1];
-    cur_pos[2] = cloud_points[i / POINT_CLOUD_CLN][2];
+    cur_pos[0] = cloud_points[i / POINT_CLOUD_CLN-1][0];
+    cur_pos[1] = cloud_points[i / POINT_CLOUD_CLN-1][1];
+    cur_pos[2] = cloud_points[i / POINT_CLOUD_CLN-1][2];
     
     // clear the last row of tokens
-    cloud_points[i / POINT_CLOUD_CLN][0] = NOT_A_NUM;
-    cloud_points[i / POINT_CLOUD_CLN][1] = NOT_A_NUM;
-    cloud_points[i / POINT_CLOUD_CLN][2] = NOT_A_NUM;
+    cloud_points[i / POINT_CLOUD_CLN-1][0] = NOT_A_NUM;
+    cloud_points[i / POINT_CLOUD_CLN-1][1] = NOT_A_NUM;
+    cloud_points[i / POINT_CLOUD_CLN-1][2] = NOT_A_NUM;
 
     return i / POINT_CLOUD_CLN -1;
 }
