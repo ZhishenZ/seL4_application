@@ -49,6 +49,7 @@ struct block
 // by default 10 blocks
 uint8_t block_number = 0;
 struct block blocks[100];
+double cur_pos[3] = {0,0,0};
 
 double euclidean_distance(double x1, double y1, double x2, double y2)
 {
@@ -279,7 +280,16 @@ waitForIncomingConnection(
     return ret;
 }
 
-int tokenize_string(char str[], char delimiters[], double tokens[][3])
+/**
+ * @brief 
+ * 
+ * @param str 
+ * @param delimiters 
+ * @param tokens 
+ * @return the length of the point cloud 
+ */
+
+int tokenize_string(char str[], char delimiters[], double cloud_points[][3], double cur_pos[3])
 {
 
     char *p = str;
@@ -288,10 +298,20 @@ int tokenize_string(char str[], char delimiters[], double tokens[][3])
     {
 
         p = strtok(i == 0 ? str : NULL, delimiters); // only the first call pass str
-        tokens[i / POINT_CLOUD_CLN][i % POINT_CLOUD_CLN] = (p) ? atof(p) : NOT_A_NUM;
+        cloud_points[i / POINT_CLOUD_CLN][i % POINT_CLOUD_CLN] = (p) ? atof(p) : NOT_A_NUM;
     }
 
-    return i / POINT_CLOUD_CLN;
+    // pass the value tocurrent position 
+    cur_pos[0] = cloud_points[i / POINT_CLOUD_CLN][0];
+    cur_pos[1] = cloud_points[i / POINT_CLOUD_CLN][1];
+    cur_pos[2] = cloud_points[i / POINT_CLOUD_CLN][2];
+    
+    // clear the last row of tokens
+    cloud_points[i / POINT_CLOUD_CLN][0] = NOT_A_NUM;
+    cloud_points[i / POINT_CLOUD_CLN][1] = NOT_A_NUM;
+    cloud_points[i / POINT_CLOUD_CLN][2] = NOT_A_NUM;
+
+    return i / POINT_CLOUD_CLN -1;
 }
 
 //------------------------------------------------------------------------------
@@ -417,7 +437,7 @@ int run()
             memset(receivedData, 0, sizeof(receivedData));
         }
 
-        lidar_points_len = tokenize_string(very_long_tmp, " ,[]\n", lidar_points);
+        lidar_points_len = tokenize_string(very_long_tmp, " ,[]\n", lidar_points,cur_pos);
         printf("The lidar data length is: %d\r\n", lidar_points_len);
         // printf("Got HTTP Page:\n%s\r\n", very_long_tmp);
 
@@ -456,7 +476,7 @@ int run()
             cur_y /= pre_lidar_points_len;
 
             // send the landing infomation to the drone
-            sprintf(str_tem, "%f %f\r\n", cur_x, cur_y);
+            sprintf(str_tem, "%f %f %f\r\n", cur_x+cur_pos[0], cur_y+cur_pos[1],cur_pos[2]);
             strcat(request_land, str_tem);
             size_t actualLen_land = sizeof(request_land);
             size_t to_write_land = strlen(request_land);
@@ -508,7 +528,7 @@ int run()
                          *
                          */
                         // printf("-----n if\n");
-                        blocks[i].z = 0.0;
+                        blocks[i].z = -cur_pos[2];;
                         blocks[i].number++;
                         cluster_found = 1;
                         break;
@@ -521,7 +541,7 @@ int run()
                 {
                     blocks[block_number].x = lidar_points[j][0];
                     blocks[block_number].y = lidar_points[j][1];
-                    blocks[block_number].z = 0.0;
+                    blocks[block_number].z = -cur_pos[2];
                     blocks[block_number].number = 1;
                     block_number += 1;
                     printf("number of blocks: %d\n", block_number);

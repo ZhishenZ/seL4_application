@@ -35,11 +35,8 @@ class LidarTest:
         self.client.enableApiControl(True)
         
         
-    def fly_to_destination(self,lidarData,x_relativ, y_relativ):
-        self.client.moveToPositionAsync(lidarData.pose.position.x_val+x_relativ, 
-                                                lidarData.pose.position.y_val+y_relativ, 
-                                                lidarData.pose.position.z_val,
-                                                5).join()
+    def fly_to_destination(self,x, y,z):
+        self.client.moveToPositionAsync(x,y,z,5).join()
         
 
     def execute(self):
@@ -58,6 +55,9 @@ class LidarTest:
         while(True):
             
             lidarData = self.client.getLidarData()
+            # get the lidar points
+            points = self.parse_lidarData(lidarData)
+            cur_pos = np.array([[lidarData.pose.position.x_val, lidarData.pose.position.y_val, lidarData.pose.position.z_val]])
 
             ## TODO receive data from the raspberry pi
             data_recv = conn.recv(128)
@@ -67,8 +67,7 @@ class LidarTest:
                 break
             print("recv:",data_recv)
 
-            # get the lidar points
-            points = self.parse_lidarData(lidarData)
+            
 
             # 'U' stands for UP
             if str(data_recv)[2] == 'U':
@@ -82,7 +81,7 @@ class LidarTest:
                 
                 destination = re.findall(r"[-+]?\d*\.?\d+|[-+]?\d+", str(data_recv))
                 print("-----------destination-----------\n",destination[0],destination[1],"\n\n")
-                self.fly_to_destination(lidarData,float(destination[0]),float(destination[1]))
+                self.fly_to_destination(float(destination[0]),float(destination[1]),float(destination[2]))
                 # self.client.moveToPositionAsync(lidarData.pose.position.x_val+float(destination[0]), 
                 #                                 lidarData.pose.position.y_val+float(destination[1]), 
                 #                                 lidarData.pose.position.z_val,
@@ -97,7 +96,7 @@ class LidarTest:
 
             # Send to the Raspberry Pi 
             ## cast the lidar points and send data to the raspberry
-            data_str = str(np.around(points,6))
+            data_str = str(np.around(points,6)) + str(np.around(cur_pos,6))
             data_str += "\0"
             
             #  uncomment this if print the lidar data
