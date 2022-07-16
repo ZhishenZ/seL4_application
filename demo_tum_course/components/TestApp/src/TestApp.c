@@ -11,7 +11,23 @@
 #include <unistd.h>
 
 // Assign the RPC endpoint based on the names used by this client
+/**
+ * @todo store the points in a dictionary ?
+ * @todo maybe transfer the absolute position from the python interface to Rpi?
+ * @todo make the code neat!!!
+ */
 
+
+
+/*
+
+sudo sdk/scripts/open_trentos_build_env.sh sdk/build-system.sh sdk/demos/demo_tum_course rpi3 build-rpi3-Debug-demo_tum_course-task5 -DCMAKE_BUILD_TYPE=Debug
+
+*/
+#define POINT_CLOUD_ROW 500
+#define POINT_CLOUD_CLN 3
+#define POINT_CLOUD_NUM 3 * 500
+#define POINT_CLOUD_SIZE sizeof(double) * 3 * 500
 #define NOT_A_NUM (__builtin_nanf(""))
 
 static char fileData[4096];
@@ -248,10 +264,10 @@ int tokenize_string(char str[], char delimiters[], double tokens[][3])
     {
 
         p = strtok(i == 0 ? str : NULL, delimiters); // only the first call pass str
-        tokens[i / 3][i % 3] = (p) ? atof(p) : NOT_A_NUM;
+        tokens[i / POINT_CLOUD_CLN][i % POINT_CLOUD_CLN] = (p) ? atof(p) : NOT_A_NUM;
     }
 
-    return i / 3;
+    return i / POINT_CLOUD_CLN;
 }
 
 //------------------------------------------------------------------------------
@@ -320,9 +336,7 @@ int run()
     size_t actualLen_up = sizeof(request_up);
     size_t to_write_up = strlen(request_up);
 
-    const char request_land[] = "LAND\r\n";
-    size_t actualLen_land = sizeof(request_land);
-    size_t to_write_land = strlen(request_land);
+    char request_land[256] = "LAND\r\n";
 
     do
     {
@@ -338,12 +352,18 @@ int run()
     }
     printf("HTTP request successfully sent");
 
+    /**
+     * @todo put these variables somewhere else
+     * 
+     */
     size_t actualLenRecv = 0;
     char very_long_tmp[0xffff];
     int string_good = 1;
     int counter = 0;
-    double lidar_points[500][3];
-    int lidar_points_len;
+    double lidar_points[POINT_CLOUD_ROW][POINT_CLOUD_CLN];
+    double pre_lidar_points[POINT_CLOUD_ROW][POINT_CLOUD_CLN];
+    int lidar_points_len, pre_lidar_points_len;
+    char str_tem[32];
 
     while (1)
     {
@@ -389,13 +409,33 @@ int run()
         if (counter > 3)
         {
             printf("Fly to Destination and landing\r\n");
+
+            // calculate the mean of the relative x and y value
+            double cur_x = 0;
+            double cur_y = 0;
+            for (int i = 0; i < pre_lidar_points_len; i++)
+            {
+                cur_x += pre_lidar_points[i][0];
+                cur_y += pre_lidar_points[i][1];
+            }
+            cur_x /= pre_lidar_points_len;
+            cur_y /= pre_lidar_points_len;
+
+
+            // send the landing infomation to the drone
+            sprintf(str_tem,"%f %f\r\n",cur_x,cur_y);
+            strcat(request_land, str_tem);
+            size_t actualLen_land = sizeof(request_land);
+            size_t to_write_land = strlen(request_land);
+
+
             do
             {
                 seL4_Yield();
                 ret = OS_Socket_write(hServer, request_land, to_write_land, &actualLen_land);
             } while (ret == OS_ERROR_WOULD_BLOCK);
 
-             /**
+            /**
              * @todo the break should be changed to something else later
              *
              */
@@ -404,13 +444,20 @@ int run()
         else
         { /*else fly in vertical direction*/
             printf("Fly in vertical direction\r\n");
+
+            // if there is lidar points, record it for the landing destination
+            if (lidar_points_len > 10)
+            {
+                // copy the current lidar points
+                memcpy(pre_lidar_points, lidar_points, POINT_CLOUD_SIZE);
+                pre_lidar_points_len = lidar_points_len;
+            }
+
             do
             {
                 seL4_Yield();
                 ret = OS_Socket_write(hServer, request_up, to_write_up, &actualLen_up);
             } while (ret == OS_ERROR_WOULD_BLOCK);
-
-           
         }
 
         strcpy(very_long_tmp, "");

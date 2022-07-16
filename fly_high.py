@@ -7,7 +7,7 @@ import argparse
 import numpy
 from numpy import linalg as LA
 
-
+VERTICAL_SPEED = 0.4
 
 
 ## for the test
@@ -20,6 +20,10 @@ from pyrsistent import s
 np.set_printoptions(suppress=True, threshold = np.inf)
 
 
+# for the string tokenization
+import re
+
+
 # Makes the drone fly and get Lidar data
 class LidarTest:
 
@@ -29,6 +33,14 @@ class LidarTest:
         self.client = airsim.MultirotorClient()
         self.client.confirmConnection()
         self.client.enableApiControl(True)
+        
+        
+    def fly_to_destination(self,lidarData,x_relativ, y_relativ):
+        self.client.moveToPositionAsync(lidarData.pose.position.x_val+x_relativ, 
+                                                lidarData.pose.position.y_val+y_relativ, 
+                                                lidarData.pose.position.z_val,
+                                                5).join()
+        
 
     def execute(self):
 
@@ -45,44 +57,44 @@ class LidarTest:
         
         while(True):
             
-            # print("while(True)")
             lidarData = self.client.getLidarData()
 
-            ## TODO
-            data = conn.recv(128)
+            ## TODO receive data from the raspberry pi
+            data_recv = conn.recv(128)
     
-            if not data: 
+            if not data_recv: 
                 print("connection drop...")
                 break
-            print("recv:",data)
+            print("recv:",data_recv)
 
             # get the lidar points
             points = self.parse_lidarData(lidarData)
 
             # 'U' stands for UP
-            if str(data)[2] == 'U':
+            if str(data_recv)[2] == 'U':
                 
-                z_position-=0.4
+                z_position-=VERTICAL_SPEED
                 self.client.moveToPositionAsync(lidarData.pose.position.x_val, lidarData.pose.position.y_val, z_position, 5).join()
             
-                if len(points) > 10:
-                    pre_points = points
-            
-            
             # 'L' stands for landing
-            elif str(data)[2] == 'L':
-
-                center_point = pre_points.mean(axis = 0)
-
-                self.client.moveToPositionAsync(lidarData.pose.position.x_val+center_point[0], 
-                                                lidarData.pose.position.y_val+center_point[1], 
-                                                lidarData.pose.position.z_val,
-                                                5).join()
+            elif str(data_recv)[2] == 'L':
+                
+                destination = re.findall(r"[-+]?\d*\.?\d+|[-+]?\d+", str(data_recv))
+                print("-----------destination-----------\n",destination[0],destination[1],"\n\n")
+                self.fly_to_destination(lidarData,float(destination[0]),float(destination[1]))
+                # self.client.moveToPositionAsync(lidarData.pose.position.x_val+float(destination[0]), 
+                #                                 lidarData.pose.position.y_val+float(destination[1]), 
+                #                                 lidarData.pose.position.z_val,
+                #                                 5).join()
+                
                 airsim.wait_key("press any key to land")
                 self.client.landAsync().join()
                 break
 
-            
+
+
+
+            # Send to the Raspberry Pi 
             ## cast the lidar points and send data to the raspberry
             data_str = str(np.around(points,6))
             data_str += "\0"
@@ -90,9 +102,10 @@ class LidarTest:
             #  uncomment this if print the lidar data
             # print("Print the lidar data\n",data_str)
             
+            # TODO the print can be deleted later 
             print("The lidar data length is {}\n".format(len(points)))
+            
             conn.send(data_str.encode())
-
             time.sleep(0.025)
             
             
