@@ -9,6 +9,7 @@
 #include <camkes.h>
 
 #include <unistd.h>
+#include <math.h>
 
 // Assign the RPC endpoint based on the names used by this client
 /**
@@ -16,8 +17,6 @@
  * @todo maybe transfer the absolute position from the python interface to Rpi?
  * @todo make the code neat!!!
  */
-
-
 
 /*
 
@@ -29,9 +28,34 @@ sudo sdk/scripts/open_trentos_build_env.sh sdk/build-system.sh sdk/demos/demo_tu
 #define POINT_CLOUD_NUM 3 * 500
 #define POINT_CLOUD_SIZE sizeof(double) * 3 * 500
 #define NOT_A_NUM (__builtin_nanf(""))
+#define DISTANCE_THRESHOLD 30*30
 
 static char fileData[4096];
 static const if_OS_Socket_t networkStackCtx = IF_OS_SOCKET_ASSIGN(networkStack);
+
+/**
+ * @brief an instance of the obstacle block
+ * @param number: the number of points that belongs to this block set
+ *
+ */
+struct block
+{
+    double x ;
+    double y ;
+    double z ;
+    int number;
+};
+
+// by default 10 blocks
+uint8_t block_number = 0;
+struct block blocks[100];
+
+double euclidean_distance(double x1, double y1, double x2, double y2)
+{
+    // Calculating distance
+    // return sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2) * 1.0);
+    return (x2-x1)*(x2-x1) + (y2-y1)*(y2-y1);
+}
 
 //------------------------------------------------------------------------------
 static OS_FileSystem_Config_t spiffsCfg_1 =
@@ -354,7 +378,7 @@ int run()
 
     /**
      * @todo put these variables somewhere else
-     * 
+     *
      */
     size_t actualLenRecv = 0;
     char very_long_tmp[0xffff];
@@ -410,6 +434,16 @@ int run()
         {
             printf("Fly to Destination and landing\r\n");
 
+            /**
+             * @todo temporarily print the stored data points
+             *
+             */
+            for (int i = 0; i < block_number; i++)
+            {
+
+                printf("Block %d  x:%f y:%f height:%f number: %d\n", (i + 1), blocks[i].x, blocks[i].y, blocks[i].z, blocks[i].number);
+            }
+
             // calculate the mean of the relative x and y value
             double cur_x = 0;
             double cur_y = 0;
@@ -421,13 +455,11 @@ int run()
             cur_x /= pre_lidar_points_len;
             cur_y /= pre_lidar_points_len;
 
-
             // send the landing infomation to the drone
-            sprintf(str_tem,"%f %f\r\n",cur_x,cur_y);
+            sprintf(str_tem, "%f %f\r\n", cur_x, cur_y);
             strcat(request_land, str_tem);
             size_t actualLen_land = sizeof(request_land);
             size_t to_write_land = strlen(request_land);
-
 
             do
             {
@@ -451,6 +483,49 @@ int run()
                 // copy the current lidar points
                 memcpy(pre_lidar_points, lidar_points, POINT_CLOUD_SIZE);
                 pre_lidar_points_len = lidar_points_len;
+            }
+
+            /**
+             * @brief record the blocks center points
+             *
+             */
+
+            int cluster_found = 0;
+
+            // loop the lidar pointss
+            for (int j = 0; j < lidar_points_len; j++)
+            {
+
+                for (int i = 0; i < block_number; i++)
+                {
+                    // printf("euclidean_distance: %f\n",euclidean_distance(lidar_points[j][0], lidar_points[j][1], blocks[i].x, blocks[i].y));
+                    if (euclidean_distance(lidar_points[j][0], lidar_points[j][1], blocks[i].x, blocks[i].y) < DISTANCE_THRESHOLD)
+                    {
+                        blocks[i].x = (lidar_points[j][0] + blocks[i].x * blocks[i].number) / (blocks[i].number + 1);
+                        blocks[i].y = (lidar_points[j][1] + blocks[i].y * blocks[i].number) / (blocks[i].number + 1);
+                        /**
+                         * @todo z has to be changed later on
+                         *
+                         */
+                        // printf("-----n if\n");
+                        blocks[i].z = 0.0;
+                        blocks[i].number++;
+                        cluster_found = 1;
+                        break;
+                    }
+
+                    cluster_found = 0;
+                }
+
+                if (!cluster_found)
+                {
+                    blocks[block_number].x = lidar_points[j][0];
+                    blocks[block_number].y = lidar_points[j][1];
+                    blocks[block_number].z = 0.0;
+                    blocks[block_number].number = 1;
+                    block_number += 1;
+                    printf("number of blocks: %d\n", block_number);
+                }
             }
 
             do

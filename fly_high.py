@@ -74,7 +74,8 @@ class LidarTest:
             if str(data_recv)[2] == 'U':
                 
                 z_position-=VERTICAL_SPEED
-                self.client.moveToPositionAsync(lidarData.pose.position.x_val, lidarData.pose.position.y_val, z_position, 5).join()
+                self.client.moveByVelocityAsync(0, 0, -VERTICAL_SPEED/0.025, 0.025)
+                # self.client.moveToPositionAsync(lidarData.pose.position.x_val, lidarData.pose.position.y_val, z_position, 5).join()
             
             # 'L' stands for landing
             elif str(data_recv)[2] == 'L':
