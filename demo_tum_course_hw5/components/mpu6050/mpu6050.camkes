@@ -1,0 +1,20 @@
+ /*
+  * Declare the MPU6050 component:
+  */
+
+#pragma once
+import <std_connector.camkes>;
+
+#include "include/if_MPU6050.camkes"
+
+#define MPU6050_COMPONENT_DEFINE( \
+    _inst_) \
+component _inst_ { \
+    uses if_I2C   i2c_rpc; \
+    dataport Buf  i2c_port; \
+    \
+   consumes I2CUnlock i2cBus_notify;\
+    \
+    \
+    provides if_MPU6050 mpu6050_rpc; \
+}

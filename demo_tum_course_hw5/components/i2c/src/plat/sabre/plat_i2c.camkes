@@ -1,0 +1,52 @@
+/*
+ * I2C defaults for platform sabre (i.MX6 based Sabre Lite board)
+ *
+ * Copyright (C) 2021, HENSOLDT Cyber GmbH
+ */
+
+#pragma once
+
+import <std_connector.camkes>;
+import <global-connectors.camkes>;
+
+/**
+ * In case the following peripherals are not mapped to a memory area, the
+ * corresponding init function call would fail.
+ *
+ * iomux:       - IOMUX Controller (iomuxc) configures the I/O-pins for I2C
+ *                usage
+ *              => required for mux_sys_init()
+ *
+ * ccm:         - Clock Controller Module (ccm) required to setup the clock for
+ *                the I2C peripheral
+ *              => required for clock_sys_init()
+ *
+ * analog:      - Clock Controller Module Analog (ccm_analog) gives access for
+ *                the analog PLLs (ARM PLL, System PLL,...)
+ *              => required for clock_sys_init()
+ */
+#define HARDWARE_I2C_INTERFACES     \
+    consumes Dummy iomux;           \
+    consumes Dummy ccm;             \
+    consumes Dummy analog;          \
+    emits    Dummy dummy_source;
+
+#define DTB_I2C_HW_MAPPING_CONNECTION(_dst_)                    \
+    connection seL4DTBHardwareThreadless conn_i2c_ ## _dst_(    \
+        from dummy_source,                                      \
+        to   _dst_)
+
+#define HARDWARE_I2C_COMPOSITION              \
+    DTB_I2C_HW_MAPPING_CONNECTION(iomux);     \
+    DTB_I2C_HW_MAPPING_CONNECTION(ccm);       \
+    DTB_I2C_HW_MAPPING_CONNECTION(analog);
+
+#define HARDWARE_I2C_CONFIG                                                   \
+    iomux.dtb     = dtb({"path":"/soc/aips-bus@2000000/iomuxc@20e0000"});     \
+    ccm.dtb       = dtb({"path":"/soc/aips-bus@2000000/ccm@20c4000"});        \
+    analog.dtb    = dtb({"path":"/soc/aips-bus@2000000/anatop@20c8000"});
+
+// Create a CAmkES component for each I2C port
+I2C_DTB_COMPONENT_DEFINE(I2C_1, {"path":"/soc/aips-bus@2100000/i2c@21a0000"})
+I2C_DTB_COMPONENT_DEFINE(I2C_2, {"path":"/soc/aips-bus@2100000/i2c@21a4000"})
+I2C_DTB_COMPONENT_DEFINE(I2C_3, {"path":"/soc/aips-bus@2100000/i2c@21a8000"})

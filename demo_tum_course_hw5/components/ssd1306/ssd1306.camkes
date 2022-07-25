@@ -1,0 +1,20 @@
+/*
+ * Declare the SSD1306 component:
+ */
+
+ #pragma once
+ import <std_connector.camkes>;
+
+ #include "include/if_SSD1306.camkes"
+
+ #define SSD1306_COMPONENT_DEFINE( \
+     _inst_) \
+component _inst_ {\
+    uses if_I2C     i2c_rpc; \
+    dataport Buf    i2c_port;\
+    \
+    consumes I2CUnlock i2cBus_notify; \
+    \
+    provides if_SSD1306 ssd1306_rpc;\
+    dataport Buf    ssd1306_port; \
+}

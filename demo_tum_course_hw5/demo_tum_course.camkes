@@ -1,0 +1,219 @@
+/*
+* Main CAmkES configuration file of the exercise demo application.
+*
+* Copyright (C) 2021, HENSOLDT Cyber GmbH
+*/
+#pragma once
+import <std_connector.camkes>;
+#include "system_config.h"
+
+//----------------------------------------------------------------------
+// Network
+//----------------------------------------------------------------------
+#include "plat_nic.camkes"
+
+//----------------------------------------------------------------------
+// Storage
+//----------------------------------------------------------------------
+// #include "RamDisk/RamDisk.camkes"
+// RamDisk_COMPONENT_DEFINE(RamDisk)
+#include "StorageServer/camkes/StorageServer.camkes"
+StorageServer_COMPONENT_DEFINE(StorageServer)
+
+#include "RPi_SPI_Flash/RPi_SPI_Flash.camkes"
+RPi_SPI_Flash_COMPONENT_DEFINE(RPi_SPI_Flash)
+RPi_SPI_Flash_HW_COMPONENT_DEFINE(RPi_SPI_Flash_HW)
+
+#include "TimeServer/camkes/TimeServer.camkes"
+TimeServer_COMPONENT_DEFINE(TimeServer)
+
+
+#include "components/TestApp/TestApp.camkes"
+
+
+
+//----------------------------------------------------------------------
+// Network Stack
+//----------------------------------------------------------------------
+#include "NetworkStack_PicoTcp/camkes/NetworkStack_PicoTcp.camkes"
+NetworkStack_PicoTcp_COMPONENT_DEFINE(
+    NetworkStack_PicoTcp,
+    NIC_DRIVER_RINGBUFFER_SIZE,
+    NetworkStack_PicoTcp_NO_ADDITIONAL_INTERFACES)
+
+#include "components/i2c/i2c.camkes"
+#include "components/mpu6050/mpu6050.camkes"
+//I2C_MEMORY_COMPONENT_DEFINE(I2C_0)
+
+#ifdef I2C_HARDWARE_COMPONENTS
+I2C_HARDWARE_COMPONENTS(I2CDriverHw)
+#endif
+
+MPU6050_COMPONENT_DEFINE(MPU6050)
+
+
+// ------ Testapp.camkes ------
+import <if_OS_Storage.camkes>;
+#include <if_OS_Socket.camkes>
+component TestApp {
+    control;
+
+    // For underlying storage - partition 1
+    uses if_OS_Storage storage_rpc_1;
+    dataport Buf storage_dp_1;
+    
+    // For underlying storage - partition 2
+    uses if_OS_Storage storage_rpc_2;
+    dataport Buf storage_dp_2;
+    
+    // Networking
+    IF_OS_SOCKET_USE(networkStack)
+
+    //I2C
+    consumes I2CUnlock i2cBus_notify;
+
+    uses        if_I2C              i2c_rpc;
+    dataport    Buf                 i2c_port;
+
+    uses        if_MPU6050           mpu6050_rpc;
+}
+// ------ end Testapp.camkes ------
+
+
+//----------------------------------------------------------------------
+// System
+//----------------------------------------------------------------------
+assembly {
+    composition {
+        //----------------------------------------------------------------------
+        // Storage
+        //----------------------------------------------------------------------
+        // Instantiate HW and driver component
+        component RPi_SPI_Flash flash;
+        component RPi_SPI_Flash_HW flash_hw;
+        // Connect interface USED by driver
+        RPi_SPI_Flash_INSTANCE_CONNECT(
+            flash,
+            flash_hw
+        )
+
+        //----------------------------------------------------------------------
+        // StorageServer
+        //----------------------------------------------------------------------
+        component StorageServer storageServer;
+        StorageServer_INSTANCE_CONNECT(
+            storageServer,
+            flash.storage_rpc, flash.storage_port
+            // flash_hw.storage_rpc, flash_hw.storage_port
+        )
+        StorageServer_INSTANCE_CONNECT_CLIENTS(
+            storageServer,
+            testApp.storage_rpc_1, testApp.storage_dp_1,
+            testApp.storage_rpc_2, testApp.storage_dp_2
+        )
+
+        component TimeServer timeServer;
+        TimeServer_INSTANCE_CONNECT_CLIENTS(
+            timeServer,
+            flash.timeServer_rpc, flash.timeServer_notify,
+            EXERCISE_DEMO_NIC_CONNECTION_TIMESERVER(nwDriver)
+            nwStack.timeServer_rpc, nwStack.timeServer_notify
+        )
+
+        //----------------------------------------------------------------------
+        // Network Driver
+        //----------------------------------------------------------------------
+        EXERCISE_DEMO_NIC_INSTANCE(nwDriver)
+
+        //----------------------------------------------------------------------
+        // Network Stack
+        //----------------------------------------------------------------------
+        component NetworkStack_PicoTcp nwStack;
+
+        NetworkStack_PicoTcp_INSTANCE_CONNECT(
+            nwStack,
+            nwDriver
+        )
+
+        NetworkStack_PicoTcp_INSTANCE_CONNECT_CLIENTS(
+            nwStack,
+            testApp, networkStack
+        )
+
+        //----------------------------------------------------------------------
+        // Demo Component (using File System)
+        //----------------------------------------------------------------------
+        component TestApp testApp;
+
+        // I2C 
+        component MPU6050 mpu6050;
+        #ifdef I2C_HARDWARE_COMPONENTS
+        component I2C_1  i2cdriver;
+        component I2CDriverHw i2cdriverhw;
+        #else
+        component I2C_3  i2cdriver;
+        #endif
+
+        I2C_INSTANCE_CONNECT_CLIENT(
+            i2cdriver,
+            testApp.i2c_rpc, testApp.i2c_port,
+            testApp.i2cBus_notify, 1
+        )
+        I2C_INSTANCE_CONNECT_CLIENT(
+             i2cdriver,
+             mpu6050.i2c_rpc, mpu6050.i2c_port,
+             mpu6050.i2cBus_notify, 2
+        )
+        connection seL4RPCCall mpu6050_rpc (
+          from testApp.mpu6050_rpc,
+          to mpu6050.mpu6050_rpc
+        );
+        #ifdef I2C_HARDWARE_COMPONENTS
+        I2C_HARDWARE_INSTANCE_CONNECT(
+            i2cdriver,
+            i2cdriverhw
+        )
+        #endif
+
+
+}
+    configuration {
+        // ramDisk.storage_size = 2 * 1024 * 1024;
+
+        StorageServer_INSTANCE_CONFIGURE_CLIENTS(
+            storageServer,
+            FILESYSTEM_1_STORAGE_OFFSET, FILESYSTEM_1_STORAGE_SIZE,
+            FILESYSTEM_2_STORAGE_OFFSET, FILESYSTEM_2_STORAGE_SIZE
+        )
+        StorageServer_CLIENT_ASSIGN_BADGES(
+            testApp.storage_rpc_1,
+            testApp.storage_rpc_2
+        )
+        RPi_SPI_Flash_HW_INSTANCE_CONFIGURE_SELF(
+            flash_hw
+        )
+    
+        TimeServer_CLIENT_ASSIGN_BADGES(
+            flash.timeServer_rpc,
+            EXERCISE_DEMO_NIC_TIMESERVER_CLIENTS(nwDriver)
+            nwStack.timeServer_rpc
+        )
+
+        EXERCISE_DEMO_NIC_CONFIG(nwDriver)
+
+        NetworkStack_PicoTcp_CLIENT_ASSIGN_BADGES(
+            testApp, networkStack
+        )
+        NetworkStack_PicoTcp_INSTANCE_CONFIGURE_CLIENTS(
+            nwStack,
+            2
+        )
+
+        #ifdef I2C_HARDWARE_COMPONENTS
+        I2C_HARDWARE_INSTANCE_CONFIGURE_SELF(
+            i2cdriverhw,
+            I2C1_ADDR)
+        #endif
+
+    }
+}

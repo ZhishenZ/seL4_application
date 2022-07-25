@@ -1,0 +1,85 @@
+/*
+ * Copyright (C) 2021-2022, HENSOLDT Cyber GmbH
+ */
+
+ #pragma once
+import <std_connector.camkes>;
+
+
+ #include "include/if_I2C.camkes"
+
+ /*
+  * Declare the I2C Bus driver component:
+  */
+
+
+
+#define I2C_MEMORY_COMPONENT_DEFINE( \
+_inst_) \
+component _inst_ { \
+    \
+    emits I2CUnlock      i2cBus_notify1; \
+    emits I2CUnlock      i2cBus_notify2; \
+    emits I2CUnlock      i2cBus_notify3; \
+\
+    provides if_I2C     i2c_rpc; \
+    dataport Buf        i2c_port; \
+    \
+    I2C_HARDWARE_INTERFACES\
+}
+
+#define I2C_DTB_COMPONENT_DEFINE( \
+_type_, \
+_dtb_name_ \
+) \
+\
+component _type_ { \
+\
+    emits I2CUnlock      i2cBus_notify1; \
+    emits I2CUnlock      i2cBus_notify2; \
+    emits I2CUnlock      i2cBus_notify3; \
+\
+    provides    if_I2C      i2c_rpc; \
+    dataport    Buf         i2c_port; \
+    \
+    emits       Dummy       hw_src; \
+    consumes    Dummy       dev; \
+    \
+    HARDWARE_I2C_INTERFACES \
+    \
+    composition { \
+        connection seL4DTBHardware con_hw(from hw_src, to dev); \
+        HARDWARE_I2C_COMPOSITION \
+    } \
+    \
+    configuration { \
+        dev.dtb = dtb(_dtb_name_); \
+        dev.generate_interrupts = 1; \
+        HARDWARE_I2C_CONFIG \
+    } \
+}
+
+
+#include "plat_i2c.camkes"
+
+#define I2C_INSTANCE_CONNECT_CLIENT( \
+    _inst_, \
+    _peer_inst_rpc_, \
+    _peer_inst_port_, \
+    _evt_, \
+    _num_) \
+    \
+    connection  seL4RPCCall \
+        _inst_ ## _i2c_rpc ## _num_ ( \
+            from _peer_inst_rpc_,\
+            to   _inst_.i2c_rpc);\
+        \
+    connection  seL4SharedData \
+        _inst_ ## _storage_port ## _num_( \
+            from _peer_inst_port_, \
+            to   _inst_.i2c_port); \
+    connection seL4NotificationNative \
+        _inst_ ## _evt##_num_ (\
+        from _inst_.i2cBus_notify ## _num_,\
+        to  _evt_);
+

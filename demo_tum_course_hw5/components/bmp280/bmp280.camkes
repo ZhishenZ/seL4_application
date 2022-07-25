@@ -1,0 +1,20 @@
+ /*
+  * Declare the BMP280 component:
+  */
+
+#pragma once
+import <std_connector.camkes>;
+
+#include "include/if_BMP280.camkes"
+
+#define BMP280_COMPONENT_DEFINE( \
+    _inst_) \
+component _inst_ { \
+    uses if_I2C   i2c_rpc; \
+    dataport Buf  i2c_port; \
+    \
+   consumes I2CUnlock i2cBus_notify;\
+    \
+    \
+    provides if_BMP280 bmp280_rpc; \
+}

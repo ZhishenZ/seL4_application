@@ -1,0 +1,40 @@
+
+
+procedure if_MPU6050 {
+    include "stdint.h";
+    include "stdbool.h";
+
+    /**
+    * @brief Retrieve data from Sensor
+    *
+    * @details Will use the I2C bus interface to read out live acclX, acclY, acclX, gyroX, gyroY, gyroZ
+    *
+    * @param[out] accelX
+    *
+    * @param[out] accelY
+    *
+    * @param[out] accelZ
+    *
+    * @param[out] gyroX
+    *
+    * @param[out] gyroY
+    *
+    * @param[out] gyroZ
+    */
+    void get_data(
+    out uint16_t accelX,
+    out uint16_t accelY,
+    out uint16_t accelZ,
+    out uint16_t gyroX,
+    out uint16_t gyroY,
+    out uint16_t gyroZ);
+
+    /**
+    * @brief Check if Sensor already intialised
+    *
+    * @return true if initialised
+    */
+    bool sensor_ready(
+        void
+    );
+}

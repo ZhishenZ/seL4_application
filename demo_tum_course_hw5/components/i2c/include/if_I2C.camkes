@@ -1,0 +1,85 @@
+/*
+ * Copyright (C) 2021-2022, HENSLDT Cyber GmbH
+ */
+
+ procedure if_I2C{
+    include "if_i2c.h";
+    include "stdint.h";
+
+    
+    /**
+    * @brief Locks the mutex inside the I2C interface
+    *
+    * @details Unlock interface for internal mutex. Client should use the mutex
+    *          to ensure that they are accessing the shared memory exclusively.
+    *          This function tries to lock the mutex and therefore prevent 
+    *          other clients to use the I2C interface.
+    * 
+    * @return Either I2C_SUCCESS if the mutex was successfully locked, 
+    *         or I2C_ERROR_MUTEX_LOCKED if it is held by others. The
+    *         I2CUnlock signal is emmited when the mutex is unlocked.
+    */
+    I2C_Error_t mutex_try_lock(void);
+
+    /**
+    * @brief Unlocks the mutex inside the I2C interface.
+    *
+    * @details Unlock interface for internal mutex. Client should use the mutex
+    *          to ensure that they are accessing the shared memory exclusively.
+    *          This function releases the mutex for other clients to access 
+    *          the I2C interface. Emits the I2CUnlock signal.
+    * @return Implementation specific. 
+    */
+    I2C_Error_t mutex_unlock(void);
+
+    /**
+    * @brief Initialize I2C interface to specific slave device.
+    *
+    * @details CAmkES RPC interface handler. The main program (with the run
+    *          function) can call this function.
+    *
+    * @param dev        device address
+
+    * @return Implementation specific.
+    */
+    I2C_Error_t init_slave(
+        in int dev
+    );
+
+    /**
+    * @brief Writes len bytes to I2C interface.
+    *
+    * @details CAmkES RPC interface handler. The main program (with the run
+    *          function) can call this function.
+    *
+    * @param dev        device address
+    * @param len       number of bytes to write to the I2C device
+    * @param written    actual number of bytes that were written to I2C device
+    *
+    * @return Implementation specific.
+    */
+    I2C_Error_t write(
+        in int dev,
+        in size_t len,
+        out size_t written
+    );
+
+    /**
+    * @brief Reads len bytes from I2C interface.
+    *
+    * @details CAmkES RPC interface handler. The main program (with the run
+    *          function) can call this function.
+    *
+    * @param dev        device address
+    * @param len       number of bytes to read from the I2C device
+    * @param read       actual number of bytes that were read from the I2C device
+    *
+    * @return Implementation specific.
+    */
+    I2C_Error_t read(
+        in int device,
+        in size_t len,
+        out size_t read
+    );
+
+ };

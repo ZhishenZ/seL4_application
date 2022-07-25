@@ -1,0 +1,58 @@
+/*
+ * Copyright (C) 2021-2022, HENSOLDT Cyber GmbH
+ */
+
+#pragma once
+
+import <std_connector.camkes>;
+
+#define GPIO_SIZE 0x1000
+#define GPIO_ADDR 0x3F200000
+
+#define I2C_SIZE 0x1000
+#define I2C0_ADDR 0x3F205000
+#define I2C1_ADDR 0x3F804000
+
+ #define I2C_HARDWARE_INTERFACES \
+ dataport Buf(I2C_SIZE) regBase; \
+ dataport Buf(GPIO_SIZE) gpioBase;
+
+
+#define I2C_HARDWARE_COMPONENTS(\
+_inst_)\
+component _inst_ { \
+    hardware;\
+    \
+    dataport Buf(I2C_SIZE) regBase;\
+    dataport Buf(GPIO_SIZE) gpioBase;\
+}
+
+
+
+#define I2C_HARDWARE_INSTANCE_CONNECT(\
+    _inst_,\
+    _inst_hw_)\
+    connection seL4HardwareMMIO \
+        _inst_##_gpio_mmio (\
+            from _inst_.gpioBase,\
+            to _inst_hw_.gpioBase);\
+    \
+    connection seL4HardwareMMIO\
+        _inst_##i2c_mmio(\
+            from _inst_.regBase,\
+            to _inst_hw_.regBase);
+
+
+
+#define I2C_HARDWARE_INSTANCE_CONFIGURE_SELF( \
+    _inst_,\
+    _i2c_baseaddress_) \
+    \
+    _inst_.regBase_paddr = _i2c_baseaddress_;\
+    _inst_.regBase_size = I2C_SIZE;\
+    _inst_.gpioBase_paddr = GPIO_ADDR;\
+    _inst_.gpioBase_size = GPIO_SIZE;
+
+// Create a CAmkES component for each I2C port
+I2C_MEMORY_COMPONENT_DEFINE(I2C_0)
+I2C_MEMORY_COMPONENT_DEFINE(I2C_1)
