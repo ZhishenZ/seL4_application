@@ -1,12 +1,15 @@
 /*
-* Copyright (C) 2021, HENSOLDT Cyber GmbH
-*/
+ * Copyright (C) 2021, HENSOLDT Cyber GmbH
+ */
 #include "OS_FileSystem.h"
+#include "lib_debug/Debug.h"
 #include "OS_Socket.h"
 #include "interfaces/if_OS_Socket.h"
-#include "lib_debug/Debug.h"
 #include <string.h>
 #include <camkes.h>
+
+#include <unistd.h>
+#include <math.h>
 
 #include "OS_Error.h"
 //#include "if_i2c.h"
@@ -14,47 +17,74 @@
 //#include "mpu6050.h"
 #include <stdint.h>
 
-static char fileData[250];
-//------------------------------------------------------------------------------
-static OS_FileSystem_Config_t spiffsCfg_1 =
-    {
-        .type = OS_FileSystem_Type_SPIFFS,
-        .size = OS_FileSystem_USE_STORAGE_MAX,
-        .storage = IF_OS_STORAGE_ASSIGN(
-            storage_rpc_1,
-            storage_dp_1),
+// Assign the RPC endpoint based on the names used by this client
+/**
+ * @todo store the points in a dictionary ?
+ * @todo maybe transfer the absolute position from the python interface to Rpi?
+ * @todo make the code neat!!!
+ */
+
+/*
+
+sudo sdk/scripts/open_trentos_build_env.sh sdk/build-system.sh sdk/demos/demo_tum_course rpi3 build-rpi3-Debug-demo_tum_course-task5 -DCMAKE_BUILD_TYPE=Debug
+
+*/
+#define POINT_CLOUD_ROW 500
+#define POINT_CLOUD_CLN 3
+#define POINT_CLOUD_NUM 3 * 500
+#define POINT_CLOUD_SIZE sizeof(double) * 3 * 500
+#define NOT_A_NUM (__builtin_nanf(""))
+#define DISTANCE_THRESHOLD 30*30
+
+static char fileData[4096];
+static const if_OS_Socket_t networkStackCtx = IF_OS_SOCKET_ASSIGN(networkStack);
+
+/**
+ * @brief an instance of the obstacle block
+ * @param number: the number of points that belongs to this block set
+ *
+ */
+struct block
+{
+    double x ;
+    double y ;
+    double z ;
+    int number;
 };
-static OS_FileSystem_Config_t spiffsCfg_2 =
-    {
-        .type = OS_FileSystem_Type_SPIFFS,
-        .size = OS_FileSystem_USE_STORAGE_MAX,
-        .storage = IF_OS_STORAGE_ASSIGN(
-            storage_rpc_2,
-            storage_dp_2),
-};
+
+// by default 10 blocks
+uint8_t block_number = 0;
+struct block blocks[100];
+double cur_pos[3] = {0,0,0};
+
+double euclidean_distance(double x1, double y1, double x2, double y2)
+{
+    // Calculating distance
+    // return sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2) * 1.0);
+    return (x2-x1)*(x2-x1) + (y2-y1)*(y2-y1);
+}
+
 
 // ---------mpu6050-------------
 #define DEVICE (0x68 << 1)
-void wait(void)
-{
-    for (int i = 0; i < 100000 * 400; i++)
-    {
-        __asm__("nop");
-    }
-}
 
-void runDemo( void)
+// void wait(void)
+// {
+//     for (int i = 0; i < 100000 * 400; i++)
+//     {
+//         __asm__("nop");
+//     }
+// }
+
+void runDemo(void)
 {
     uint16_t accelX, accelY, accelZ;
     uint16_t gyroX, gyroY, gyroZ;
 
-    while(1)
-    {
-        mpu6050_rpc_get_data(&accelX, &accelY, &accelZ, &gyroX, &gyroY, &gyroZ);
-        printf("TestApp.c: accel_X=%d, accelY=%d, accelZ=%d, gyro_X=%d, gyroY=%d, gyroZ=%d\n", \
-            accelX-32768, accelY-32768, accelZ-32768, gyroX-32768, gyroY-32768, gyroZ-32768);
-        wait();
-    }
+    mpu6050_rpc_get_data(&accelX, &accelY, &accelZ, &gyroX, &gyroY, &gyroZ);
+    printf("TestApp.c: accel_X=%d, accelY=%d, accelZ=%d, gyro_X=%d, gyroY=%d, gyroZ=%d\n", \
+        accelX-32768, accelY-32768, accelZ-32768, gyroX-32768, gyroY-32768, gyroZ-32768);
+        // wait();
 }
 
 OS_Error_t run_i2c(void)
@@ -109,13 +139,27 @@ OS_Error_t run_i2c(void)
 
     // Debug_LOG_INFO("ctrl_meas dump is 0x%x", buf[0]);
 
-    Debug_LOG_INFO("Running Demo now");
-    runDemo();
-    
-    Debug_LOG_INFO("Done");
     return err;
 }
 
+
+//------------------------------------------------------------------------------
+static OS_FileSystem_Config_t spiffsCfg_1 =
+    {
+        .type = OS_FileSystem_Type_SPIFFS,
+        .size = OS_FileSystem_USE_STORAGE_MAX,
+        .storage = IF_OS_STORAGE_ASSIGN(
+            storage_rpc_1,
+            storage_dp_1),
+};
+static OS_FileSystem_Config_t spiffsCfg_2 =
+    {
+        .type = OS_FileSystem_Type_SPIFFS,
+        .size = OS_FileSystem_USE_STORAGE_MAX,
+        .storage = IF_OS_STORAGE_ASSIGN(
+            storage_rpc_2,
+            storage_dp_2),
+};
 
 //------------------------------------------------------------------------------
 static void
@@ -202,13 +246,9 @@ test_OS_FileSystem(OS_FileSystem_Config_t *cfg)
     }
 }
 
-//----------------------------------------------------------------------
-// Network
-//----------------------------------------------------------------------
-static const if_OS_Socket_t networkStackCtx = IF_OS_SOCKET_ASSIGN(networkStack);
-//------------------------------------------------------------------------------
-static OS_Error_t waitForNetworkStackInit(
-    const if_OS_Socket_t* const ctx)
+static OS_Error_t
+waitForNetworkStackInit(
+    const if_OS_Socket_t *const ctx)
 {
     OS_NetworkStack_State_t networkStackState;
     for (;;)
@@ -225,10 +265,9 @@ static OS_Error_t waitForNetworkStackInit(
             Debug_LOG_ERROR("A FATAL_ERROR occurred in the Network Stack component.");
             return OS_ERROR_ABORTED;
         }
-
         // Yield to wait until the stack is up and running.
         seL4_Yield();
-        }
+    }
 }
 
 static OS_Error_t
@@ -236,110 +275,135 @@ waitForIncomingConnection(
     const int srvHandleId)
 {
     OS_Error_t ret;
+
     // Wait for the event letting us know that the connection was successfully
     // established.
-    for (int i=0;i<1;i++)
+    // for (;;)
+    // {
+    ret = OS_Socket_wait(&networkStackCtx);
+    if (ret != OS_SUCCESS)
     {
-        ret = OS_Socket_wait(&networkStackCtx);
-        if (ret != OS_SUCCESS)
-        {
-            Debug_LOG_ERROR("OS_Socket_wait() failed, code %d", ret);
-            break;
-        }
-
-        char evtBuffer[128];
-        const size_t evtBufferSize = sizeof(evtBuffer);
-        int numberOfSocketsWithEvents;
-
-        ret = OS_Socket_getPendingEvents(
-            &networkStackCtx,
-            evtBuffer,
-            evtBufferSize,
-            &numberOfSocketsWithEvents);
-        if (ret != OS_SUCCESS)
-        {
-            Debug_LOG_ERROR("OS_Socket_getPendingEvents() failed, code %d", ret);
-            break;
-        }
-
-        if (numberOfSocketsWithEvents == 0)
-        {
-            Debug_LOG_TRACE("OS_Socket_getPendingEvents() returned "
-            "without any pending events");
-            continue;
-        }
-
-        // We only opened one socket, so if we get more events, this is not ok.
-        if (numberOfSocketsWithEvents != 1)
-        {
-            Debug_LOG_ERROR("OS_Socket_getPendingEvents() returned with "
-                            "unexpected #events: %d", numberOfSocketsWithEvents);
-            ret = OS_ERROR_INVALID_STATE;
-            break;
-        }
-
-        OS_Socket_Evt_t event;
-        memcpy(&event, evtBuffer, sizeof(event));
-
-        if (event.socketHandle != srvHandleId)
-        {
-            Debug_LOG_ERROR("Unexpected handle received: %d, expected: %d",
-            event.socketHandle, srvHandleId);
-            ret = OS_ERROR_INVALID_HANDLE;
-            break;
-        }
-
-        // Socket has been closed by NetworkStack component.
-        if (event.eventMask & OS_SOCK_EV_FIN)
-        {
-            Debug_LOG_ERROR("OS_Socket_getPendingEvents() returned "
-            "OS_SOCK_EV_FIN for handle: %d",
-            event.socketHandle);
-            ret = OS_ERROR_NETWORK_CONN_REFUSED;
-            break;
-        }
-
-        // Incoming connection received.
-        if (event.eventMask & OS_SOCK_EV_CONN_ACPT)
-        {
-            Debug_LOG_DEBUG("OS_Socket_getPendingEvents() returned "
-            "connection established for handle: %d",
-            event.socketHandle);
-            ret = OS_SUCCESS;
-            break;
-        }
-
-        // Remote socket requested to be closed only valid for clients.
-        if (event.eventMask & OS_SOCK_EV_CLOSE)
-        {
-            Debug_LOG_ERROR("OS_Socket_getPendingEvents() returned "
-            "OS_SOCK_EV_CLOSE for handle: %d",
-            event.socketHandle);
-            ret = OS_ERROR_CONNECTION_CLOSED;
-            break;
-        }
-
-        // Error received - print error.
-        if (event.eventMask & OS_SOCK_EV_ERROR)
-        {
-            Debug_LOG_ERROR("OS_Socket_getPendingEvents() returned "
-            "OS_SOCK_EV_ERROR for handle: %d, code: %d",
-            event.socketHandle, event.currentError);
-            ret = event.currentError;
-            break;
-        }
+        Debug_LOG_ERROR("OS_Socket_wait() failed, code %d", ret);
+        // break;
     }
+    // char evtBuffer[128];
+    // const size_t evtBufferSize = sizeof(evtBuffer);
+    // int numberOfSocketsWithEvents;
+    // ret = OS_Socket_getPendingEvents(
+    //     &networkStackCtx,
+    //     evtBuffer,
+    //     evtBufferSize,
+    //     &numberOfSocketsWithEvents);
+    // if (ret != OS_SUCCESS)
+    // {
+    //     Debug_LOG_ERROR("OS_Socket_getPendingEvents() failed, code %d",
+    //                     ret);
+    //     break;
+    // }
+    // if (numberOfSocketsWithEvents == 0)
+    // {
+    //     Debug_LOG_TRACE("OS_Socket_getPendingEvents() returned "
+    //                     "without any pending events");
+    //     continue;
+    // }
+    // // We only opened one socket, so if we get more events, this is not ok.
+    // if (numberOfSocketsWithEvents != 1)
+    // {
+    //     Debug_LOG_ERROR("OS_Socket_getPendingEvents() returned with "
+    //                     "unexpected #events: %d",
+    //                     numberOfSocketsWithEvents);
+    //     ret = OS_ERROR_INVALID_STATE;
+    //     break;
+    // }
+    // OS_Socket_Evt_t event;
+    // memcpy(&event, evtBuffer, sizeof(event));
+    // if (event.socketHandle != srvHandleId)
+    // {
+    //     Debug_LOG_ERROR("Unexpected handle received: %d, expected: %d",
+    //                     event.socketHandle, srvHandleId);
+    //     ret = OS_ERROR_INVALID_HANDLE;
+    //     break;
+    // }
+    // // Socket has been closed by NetworkStack component.
+    // if (event.eventMask & OS_SOCK_EV_FIN)
+    // {
+    //     Debug_LOG_ERROR("OS_Socket_getPendingEvents() returned "
+    //                     "OS_SOCK_EV_FIN for handle: %d",
+    //                     event.socketHandle);
+    //     ret = OS_ERROR_NETWORK_CONN_REFUSED;
+    //     break;
+    // }
+    // // Incoming connection received.
+    // if (event.eventMask & OS_SOCK_EV_CONN_ACPT)
+    // {
+    //     Debug_LOG_DEBUG("OS_Socket_getPendingEvents() returned "
+    //                     "connection established for handle: %d",
+    //                     event.socketHandle);
+    //     ret = OS_SUCCESS;
 
+    //     break;
+    // }
+    // // Remote socket requested to be closed only valid for clients.
+    // if (event.eventMask & OS_SOCK_EV_CLOSE)
+    // {
+    //     Debug_LOG_ERROR("OS_Socket_getPendingEvents() returned "
+    //                     "OS_SOCK_EV_CLOSE for handle: %d",
+    //                     event.socketHandle);
+    //     ret = OS_ERROR_CONNECTION_CLOSED;
+    //     break;
+    // }
+    // // Error received - print error.
+    // if (event.eventMask & OS_SOCK_EV_ERROR)
+    // {
+    //     Debug_LOG_ERROR("OS_Socket_getPendingEvents() returned "
+    //                     "OS_SOCK_EV_ERROR for handle: %d, code: %d",
+    //                     event.socketHandle, event.currentError);
+    //     ret = event.currentError;
+    //     break;
+    // }
+    // }
     return ret;
 }
 
+/**
+ * @brief 
+ * 
+ * @param str 
+ * @param delimiters 
+ * @param tokens 
+ * @return the length of the point cloud 
+ */
 
+int tokenize_string(char str[], char delimiters[], double cloud_points[][3], double cur_pos[3])
+{
 
+    char *p = str;
+    int i;
+    for (i = 0; p /*if ptr not a null*/; i++)
+    {
+
+        p = strtok(i == 0 ? str : NULL, delimiters); // only the first call pass str
+        cloud_points[i / POINT_CLOUD_CLN][i % POINT_CLOUD_CLN] = (p) ? atof(p) : NOT_A_NUM;
+    }
+
+    // pass the value tocurrent position 
+    cur_pos[0] = cloud_points[i / POINT_CLOUD_CLN-1][0];
+    cur_pos[1] = cloud_points[i / POINT_CLOUD_CLN-1][1];
+    cur_pos[2] = cloud_points[i / POINT_CLOUD_CLN-1][2];
+    
+    // clear the last row of tokens
+    cloud_points[i / POINT_CLOUD_CLN-1][0] = NOT_A_NUM;
+    cloud_points[i / POINT_CLOUD_CLN-1][1] = NOT_A_NUM;
+    cloud_points[i / POINT_CLOUD_CLN-1][2] = NOT_A_NUM;
+
+    return i / POINT_CLOUD_CLN -1;
+}
 
 //------------------------------------------------------------------------------
+
 int run()
 {
-    Debug_LOG_INFO("Starting test_app_server...");
+    printf("Starting test_app_server...");
     // Check and wait until the NetworkStack component is up and running.
     OS_Error_t ret = waitForNetworkStackInit(&networkStackCtx);
     if (OS_SUCCESS != ret)
@@ -347,66 +411,34 @@ int run()
         Debug_LOG_ERROR("waitForNetworkStackInit() failed with: %d", ret);
         return -1;
     }
-
     OS_Socket_Handle_t hServer;
-    // ==================create starts===================
     ret = OS_Socket_create(
-    &networkStackCtx,
-    &hServer,
-    OS_AF_INET,
-    OS_SOCK_STREAM);
+        &networkStackCtx,
+        &hServer,
+        OS_AF_INET,
+        OS_SOCK_STREAM);
+
     if (ret != OS_SUCCESS)
     {
         Debug_LOG_ERROR("OS_Socket_create() failed, code %d", ret);
         return -1;
     }
-    // ==================create ends===================
-
     const OS_Socket_Addr_t dstAddr =
-    {
-        .addr = CFG_TEST_HTTP_SERVER,
-        .port = EXERCISE_SERVER_PORT
-    };
-
-    // ==================connect starts===================
-    ret = OS_Socket_connect(hServer, &dstAddr);
-        if (ret != OS_SUCCESS)
         {
-            Debug_LOG_ERROR("OS_Socket_connect() failed, code %d", ret);
-            OS_Socket_close(hServer);
-            return ret;
-        }
-    // ==================connect ends===================
+            .addr = CFG_TEST_HTTP_SERVER,
+            .port = EXERCISE_SERVER_PORT};
 
-    // // =============================bind starts===================
-    // ret = OS_Socket_bind(
-    //     hServer,
-    //     &dstAddr);
-    // if (ret != OS_SUCCESS)
-    // {
-    //     Debug_LOG_ERROR("OS_Socket_bind() failed, code %d", ret);
-    //     OS_Socket_close(hServer);
-    //     return -1;
-    // }
-    // // =============================bind ends===================
-
-    // // ==================listen starts===================
-    // ret = OS_Socket_listen(
-    // hServer,
-    // 1);
-    // if (ret != OS_SUCCESS)
-    // {
-    //     Debug_LOG_ERROR("OS_Socket_listen() failed, code %d", ret);
-    //     OS_Socket_close(hServer);
-    //     return -1;
-    // }
-    // // ==================listen ends===================
+    //------------------------------Connect establishing STARTS ----------------------
+    ret = OS_Socket_connect(hServer, &dstAddr);
+    if (ret != OS_SUCCESS)
+    {
+        Debug_LOG_ERROR("OS_Socket_connect() failed, code %d", ret);
+        OS_Socket_close(hServer);
+        return -1;
+    }
 
     static uint8_t receivedData[OS_DATAPORT_DEFAULT_SIZE];
-
-    // Debug_LOG_INFO("Accepting new connection");
-    // OS_Socket_Handle_t hSocket;
-    // OS_Socket_Addr_t srcAddr = {0};
+    printf("OS_DATAPORT_DEFAULT_SIZE %lu", OS_DATAPORT_DEFAULT_SIZE);
 
     do
     {
@@ -417,105 +449,214 @@ int run()
             OS_Socket_close(hServer);
             return -1;
         }
-        // ret = OS_Socket_accept(
-        // hServer,
-        // &hSocket,
-        // &srcAddr);
-    }
-    while (ret == OS_ERROR_TRY_AGAIN);
-    // if (ret != OS_SUCCESS)
-    // {
-    //     Debug_LOG_ERROR("OS_Socket_accept() failed, error %d", ret);
-    //     OS_Socket_close(hSocket);
-    //     return -1;
-    // }
 
-    Debug_LOG_INFO("Send request to host...");
+    } while (ret == OS_ERROR_TRY_AGAIN);
 
+    //------------------------------Connect establishing ENDS ----------------------
+
+    //------------------------------SEND REQUEST TO HOST STARTS ----------------------
+    printf("Send request to host...");
     const char request[] =
-        "GET / HTTP/1.0\r\nHost: 10.0.0.1\r\n"
-        "Connection: close\r\n\r\n";
+        "GET / HTTP/1.0\r\nHost:10.0.0.1\r\nConnection: close\r\n";
+    size_t actualLen = sizeof(request);
+    size_t to_write = strlen(request);
 
-    run_i2c();
+    const char request_up[] = "UP\r\n";
+    size_t actualLen_up = sizeof(request_up);
+    size_t to_write_up = strlen(request_up);
 
-    size_t lenWritten = sizeof(request);
-    
+    char request_land[256] = "LAND\r\n";
+
     do
     {
         seL4_Yield();
-        ret = OS_Socket_write(hServer, request, sizeof(request), &lenWritten);
-    }
-    while (ret == OS_ERROR_WOULD_BLOCK);
+        ret = OS_Socket_write(hServer, request, to_write, &actualLen);
+    } while (ret == OS_ERROR_WOULD_BLOCK);
 
-    if (ret != OS_SUCCESS)
+    if (OS_SUCCESS != ret)
     {
         Debug_LOG_ERROR("OS_Socket_write() failed with error code %d", ret);
+        OS_Socket_close(hServer);
         return -1;
     }
-    Debug_LOG_INFO("HTTP request successfully sent");
+    printf("HTTP request successfully sent");
 
-    // Loop until an error occurs.
-    do
+    /**
+     * @todo put these variables somewhere else
+     *
+     */
+    size_t actualLenRecv = 0;
+    char very_long_tmp[0xffff];
+    int string_good = 1;
+    int counter = 0;
+    double lidar_points[POINT_CLOUD_ROW][POINT_CLOUD_CLN];
+    double pre_lidar_points[POINT_CLOUD_ROW][POINT_CLOUD_CLN];
+    int lidar_points_len, pre_lidar_points_len;
+    char str_tem[32];
+
+    run_i2c();
+
+    while (1)
     {
-        size_t actualLenRecv = 0;
-        ret = OS_Socket_read(
-        hServer,
-        receivedData,
-        sizeof(receivedData),
-        &actualLenRecv);
-        switch (ret)
+
+        while (string_good)
         {
-        case OS_SUCCESS:
-            Debug_LOG_INFO(
-            "OS_Socket_read() - bytes read: %zu, err: %d",
-            actualLenRecv, ret);
+            ret = OS_Socket_read(
+                hServer,
+                receivedData,
+                sizeof(receivedData),
+                &actualLenRecv);
+
+            /**
+             * @todo uncomment these if we want to use Debug_LOG_INFO
+             *
+             */
+            // Debug_LOG_INFO("string_good--------------------------------ret:%d", ret);
+            // Debug_LOG_INFO("fileData[actualLenRecv - 1]:%d", fileData[actualLenRecv - 1]);
+            // Debug_LOG_INFO("actualLenRecv:%d", actualLenRecv);
+
             memcpy(fileData, receivedData, sizeof(fileData));
-            
-            // print index.html
-            Debug_LOG_INFO("Got HTTP Page:");
-            printf("%s\r\n", fileData);
-            
-            // size_t lenWritten = 0;
+            strcat(very_long_tmp, fileData);
+            if (fileData[actualLenRecv - 1] == '\0' && actualLenRecv)
+            {
+                string_good = 0;
+            }
+            memset(receivedData, 0, sizeof(receivedData));
+        }
 
-            // ret = OS_Socket_write(
-            // hSocket,
-            // receivedData,
-            // sizeof(fileData),
-            // &lenWritten);
-            // continue;
+        lidar_points_len = tokenize_string(very_long_tmp, " ,[]\n", lidar_points,cur_pos);
+        printf("The lidar data length is: %d\r\n", lidar_points_len);
+        // printf("Got HTTP Page:\n%s\r\n", very_long_tmp);
 
-        case OS_ERROR_TRY_AGAIN:
-            Debug_LOG_TRACE(
-            "OS_Socket_read() reported try again");
-            break;;
-        
-        case OS_ERROR_CONNECTION_CLOSED:
-            Debug_LOG_INFO(
-            "OS_Socket_read() reported connection closed");
-            break;
-        
-        case OS_ERROR_NETWORK_CONN_SHUTDOWN:
-            Debug_LOG_DEBUG(
-            "OS_Socket_read() reported connection closed");
-            break;
-        
-        default:
-            Debug_LOG_ERROR(
-            "OS_Socket_read() failed, error %d", ret);
+        if (lidar_points_len == 0)
+        {
+            counter++;
+        }
+
+        /*If we know there are three times that the lidar points are zero,
+          we confirm that there is no obstacles in the near
+        */
+
+        if (counter > 3)
+        {
+            printf("Fly to Destination and landing\r\n");
+
+            /**
+             * @todo temporarily print the stored data points
+             *
+             */
+            for (int i = 0; i < block_number; i++)
+            {
+
+                printf("Block %d  x:%f y:%f height:%f number: %d\n", (i + 1), blocks[i].x, blocks[i].y, blocks[i].z, blocks[i].number);
+            }
+
+            // calculate the mean of the relative x and y value
+            double cur_x = 0;
+            double cur_y = 0;
+            for (int i = 0; i < pre_lidar_points_len; i++)
+            {
+                cur_x += pre_lidar_points[i][0];
+                cur_y += pre_lidar_points[i][1];
+            }
+            cur_x /= pre_lidar_points_len;
+            cur_y /= pre_lidar_points_len;
+
+            // send the landing infomation to the drone
+            sprintf(str_tem, "%f %f %f\r\n", cur_x+cur_pos[0], cur_y+cur_pos[1],cur_pos[2]);
+            strcat(request_land, str_tem);
+            size_t actualLen_land = sizeof(request_land);
+            size_t to_write_land = strlen(request_land);
+
+            do
+            {
+                seL4_Yield();
+                ret = OS_Socket_write(hServer, request_land, to_write_land, &actualLen_land);
+            } while (ret == OS_ERROR_WOULD_BLOCK);
+
+            /**
+             * @todo the break should be changed to something else later
+             *
+             */
             break;
         }
+        else
+        { /*else fly in vertical direction*/
+            printf("Fly in vertical direction\r\n");
+
+            // if there is lidar points, record it for the landing destination
+            if (lidar_points_len > 10)
+            {
+                // copy the current lidar points
+                memcpy(pre_lidar_points, lidar_points, POINT_CLOUD_SIZE);
+                pre_lidar_points_len = lidar_points_len;
+            }
+
+            /**
+             * @brief record the blocks center points
+             *
+             */
+
+            int cluster_found = 0;
+
+            // loop the lidar pointss
+            for (int j = 0; j < lidar_points_len; j++)
+            {
+
+                for (int i = 0; i < block_number; i++)
+                {
+                    // printf("euclidean_distance: %f\n",euclidean_distance(lidar_points[j][0], lidar_points[j][1], blocks[i].x, blocks[i].y));
+                    if (euclidean_distance(lidar_points[j][0], lidar_points[j][1], blocks[i].x, blocks[i].y) < DISTANCE_THRESHOLD)
+                    {
+                        blocks[i].x = (lidar_points[j][0] + blocks[i].x * blocks[i].number) / (blocks[i].number + 1);
+                        blocks[i].y = (lidar_points[j][1] + blocks[i].y * blocks[i].number) / (blocks[i].number + 1);
+                        /**
+                         * @todo z has to be changed later on
+                         *
+                         */
+                        // printf("-----n if\n");
+                        blocks[i].z = -cur_pos[2];;
+                        blocks[i].number++;
+                        cluster_found = 1;
+                        break;
+                    }
+
+                    cluster_found = 0;
+                }
+
+                if (!cluster_found)
+                {
+                    blocks[block_number].x = lidar_points[j][0];
+                    blocks[block_number].y = lidar_points[j][1];
+                    blocks[block_number].z = -cur_pos[2];
+                    blocks[block_number].number = 1;
+                    block_number += 1;
+                    printf("number of blocks: %d\n", block_number);
+                }
+            }
+
+            runDemo();
+
+            do
+            {
+                seL4_Yield();
+                ret = OS_Socket_write(hServer, request_up, to_write_up, &actualLen_up);
+            } while (ret == OS_ERROR_WOULD_BLOCK);
+        }
+
+        strcpy(very_long_tmp, "");
+        string_good = 1;
+        actualLenRecv = 0;
+        memset(receivedData, 0, sizeof(receivedData));
     }
-    while (ret == OS_SUCCESS);
+
     OS_Socket_close(hServer);
 
     // ----------------------------------------------------------------------
     // Storage Test
     // ----------------------------------------------------------------------
-
-    // Work on file system 1 (residing on partition 1)
     test_OS_FileSystem(&spiffsCfg_1);
-    // Work on file system 2 (residing on partition 2)
     test_OS_FileSystem(&spiffsCfg_2);
-    Debug_LOG_INFO("Demo completed successfully.");
+    printf("Demo completed successfully.");
     return 0;
 }
