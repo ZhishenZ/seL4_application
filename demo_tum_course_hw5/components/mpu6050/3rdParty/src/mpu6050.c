@@ -220,16 +220,16 @@ void mpu6050_read(mpu6050_t *dev, uint16_t *accelX, uint16_t *accelY, uint16_t *
     // *gyroZ = gyroZ_high*256 + gyroZ_low;
     // debug("GyroZ=%d", *gyroZ);
 
-    read_register16(&dev->i2c_dev, MPU6050_RA_ACCEL_XOUT_H, accelX);
+    read_register16(&dev->i2c_dev, MPU6050_RA_ACCEL_XOUT_L, accelX);
     debug("AccelX=%d", *accelX);
-    read_register16(&dev->i2c_dev, MPU6050_RA_ACCEL_YOUT_H, accelY);
+    read_register16(&dev->i2c_dev, MPU6050_RA_ACCEL_YOUT_L, accelY);
     debug("AccelY=%d", *accelY);
-    read_register16(&dev->i2c_dev, MPU6050_RA_ACCEL_ZOUT_H, accelZ);
+    read_register16(&dev->i2c_dev, MPU6050_RA_ACCEL_ZOUT_L, accelZ);
     debug("AccelZ=%d", *accelZ);
-    read_register16(&dev->i2c_dev, MPU6050_RA_GYRO_XOUT_H, gyroX);
+    read_register16(&dev->i2c_dev, MPU6050_RA_GYRO_XOUT_L, gyroX);
     debug("GyroX=%d", *gyroX);
-    read_register16(&dev->i2c_dev, MPU6050_RA_GYRO_YOUT_H, gyroY);
+    read_register16(&dev->i2c_dev, MPU6050_RA_GYRO_YOUT_L, gyroY);
     debug("GyroY=%d", *gyroY);
-    read_register16(&dev->i2c_dev, MPU6050_RA_GYRO_ZOUT_H, gyroZ);
+    read_register16(&dev->i2c_dev, MPU6050_RA_GYRO_ZOUT_L, gyroZ);
     debug("GyroZ=%d", *gyroZ);
 }

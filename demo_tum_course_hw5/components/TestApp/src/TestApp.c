@@ -51,7 +51,8 @@ void runDemo( void)
     while(1)
     {
         mpu6050_rpc_get_data(&accelX, &accelY, &accelZ, &gyroX, &gyroY, &gyroZ);
-        printf("TestApp.c: accel_X=%d, accelY=%d, accelZ=%d, gyro_X=%d, gyroY=%d, gyroZ=%d\n", accelX, accelY, accelZ, gyroX, gyroY, gyroZ);
+        printf("TestApp.c: accel_X=%d, accelY=%d, accelZ=%d, gyro_X=%d, gyroY=%d, gyroZ=%d\n", \
+            accelX-32768, accelY-32768, accelZ-32768, gyroX-32768, gyroY-32768, gyroZ-32768);
         wait();
     }
 }
