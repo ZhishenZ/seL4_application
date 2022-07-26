@@ -24,8 +24,8 @@ extern "C" {
 #define MPU6050_CHIP_ID  0x68 /* MPU6050 has chip-id 0x68 */
 
 typedef enum {
-    MPU6050_MODE_SLEEP = 1,
-    MPU6050_MODE_WAKEUP = 0
+    MPU6050_MODE_SLEEP = 1, //sleep mode
+    MPU6050_MODE_WAKEUP = 0 //wake-up mode
 } MPU6050_Mode;
 
 
@@ -50,32 +50,25 @@ typedef struct {
 /**
  * Initialize default parameters.
  * Default configuration:
- *      mode: SLEEP
+ *      mode: WAKEUP
  */
 void mpu6050_init_default_params(mpu6050_params_t *params);
 
 
 /**
- * Initialize MPU6050 module, probes for the device, soft resets the device,
- * reads the calibration constants, and configures the device using the supplied
- * parameters. Returns true on success otherwise false.
+ * Initialize MPU6050 module. 
+ * Returns true on success otherwise false.
  *
  * The I2C address is assumed to have been initialized in the dev, and
  * may be either MPU6050_I2C_ADDRESS_0 or MPU6050_I2C_ADDRESS_1. If the I2C
  * address is unknown then try initializing each in turn.
- *
- * This may be called again to soft reset the device and initialize it again.
  */
 bool mpu6050_init(mpu6050_t *dev, mpu6050_params_t *params);
 
-/**
- * Read compensated temperature and pressure data:
- *  Temperature in degrees Celsius.
- *  Pressure in Pascals.
- *  Humidity is optional and only read for the BME280, in percent relative
- *  humidity.
- */
 
+/**
+ * Read the Accel and Gyro data from the register.
+ */
 void mpu6050_read(mpu6050_t *dev, uint16_t *accelX, uint16_t *accelY, uint16_t *accelZ, uint16_t *gyroX, uint16_t *gyroY, uint16_t *gyroZ);
 
 

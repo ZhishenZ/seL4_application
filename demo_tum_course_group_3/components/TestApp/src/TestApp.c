@@ -65,28 +65,37 @@ double euclidean_distance(double x1, double y1, double x2, double y2)
 }
 
 
-// ---------mpu6050-------------
-#define DEVICE (0x68 << 1)
+// ----------------------------- mpu6050-related events START------------------------------------
+#define DEVICE (0x68 << 1) // MPU6050 device id
 
-// void wait(void)
-// {
-//     for (int i = 0; i < 100000 * 400; i++)
-//     {
-//         __asm__("nop");
-//     }
-// }
-
-void runDemo(void)
+/**
+ * Read the accel/gyro data, and create feedback to the Airsim.
+ */
+uint16_t accelX, accelY, accelZ;
+uint16_t gyroX, gyroY, gyroZ;
+char accel_gyro_flag = 'K';
+char accel_gyro_data(uint16_t *accelX, uint16_t *accelY, uint16_t *accelZ, uint16_t *gyroX, uint16_t *gyroY, uint16_t *gyroZ)
 {
-    uint16_t accelX, accelY, accelZ;
-    uint16_t gyroX, gyroY, gyroZ;
-
-    mpu6050_rpc_get_data(&accelX, &accelY, &accelZ, &gyroX, &gyroY, &gyroZ);
-    printf("TestApp.c: accel_X=%d, accelY=%d, accelZ=%d, gyro_X=%d, gyroY=%d, gyroZ=%d\n", \
-        accelX-32768, accelY-32768, accelZ-32768, gyroX-32768, gyroY-32768, gyroZ-32768);
-        // wait();
+    mpu6050_rpc_get_data(accelX, accelY, accelZ, gyroX, gyroY, gyroZ);
+    /* printf("TestApp.c: accel_X=%d, accelY=%d, accelZ=%d, gyro_X=%d, gyroY=%d, gyroZ=%d\n", \
+         accelX-32768, accelY-32768, accelZ-32768, gyroX-32768, gyroY-32768, gyroZ-32768); */
+    if(*accelX > 12500 && *accelX < 18000) // make the drone slower
+    {
+        return 'S';
+    }
+    else if(*accelX > 47500 && *accelX < 53000) // make the drone faster
+    {
+        return 'F';
+    }
+    else // keep the speed unchanged
+    {
+        return 'K';
+    }
 }
 
+/**
+ * Initialize the mpu6050 sensor.
+ */
 OS_Error_t run_i2c(void)
 {
     OS_Error_t err = OS_SUCCESS;
@@ -119,28 +128,9 @@ OS_Error_t run_i2c(void)
         return err;
     }   
 
-    // Debug_LOG_INFO("ID of bmp280 is 0x%x", buf[0]);
-    // buf[0] = 0xf4;
-    //  i2c_err = i2c_write(&bus, DEVICE, 1, &tmp, buf);
-    // if(i2c_err != I2C_SUCCESS)
-    // {
-    //     Debug_LOG_ERROR("i2c_write() returned errorcode %d", i2c_err);
-    //     err = OS_ERROR_ABORTED;
-    //     return err;
-    // }
-
-    // i2c_err = i2c_read(&bus, DEVICE, 1, &tmp, buf);
-    // if(i2c_err != I2C_SUCCESS)
-    // {
-    //     Debug_LOG_ERROR("i2c_read() returned errorcode %d", i2c_err);
-    //     err = OS_ERROR_ABORTED;
-    //     return err;
-    // }  
-
-    // Debug_LOG_INFO("ctrl_meas dump is 0x%x", buf[0]);
-
     return err;
 }
+// ----------------------------- mpu6050-related events END ------------------------------------
 
 
 //------------------------------------------------------------------------------
@@ -461,10 +451,6 @@ int run()
     size_t actualLen = sizeof(request);
     size_t to_write = strlen(request);
 
-    const char request_up[] = "UP\r\n";
-    size_t actualLen_up = sizeof(request_up);
-    size_t to_write_up = strlen(request_up);
-
     char request_land[256] = "LAND\r\n";
 
     do
@@ -494,7 +480,7 @@ int run()
     int lidar_points_len, pre_lidar_points_len;
     char str_tem[32];
 
-    run_i2c();
+    run_i2c(); 
 
     while (1)
     {
@@ -525,7 +511,7 @@ int run()
         }
 
         lidar_points_len = tokenize_string(very_long_tmp, " ,[]\n", lidar_points,cur_pos);
-        printf("The lidar data length is: %d\r\n", lidar_points_len);
+        // printf("The lidar data length is: %d\r\n", lidar_points_len);
         // printf("Got HTTP Page:\n%s\r\n", very_long_tmp);
 
         if (lidar_points_len == 0)
@@ -562,8 +548,9 @@ int run()
             cur_x /= pre_lidar_points_len;
             cur_y /= pre_lidar_points_len;
 
-            // send the landing infomation to the drone
-            sprintf(str_tem, "%f %f %f\r\n", cur_x+cur_pos[0], cur_y+cur_pos[1],cur_pos[2]);
+            // send the landing infomation to the drone.
+            // slightly modify the destination by avoiding landing outside.
+            sprintf(str_tem, "%f %f %f\r\n", (cur_x*1.03)+cur_pos[0], (cur_y*1.03)+cur_pos[1],cur_pos[2]-1);
             strcat(request_land, str_tem);
             size_t actualLen_land = sizeof(request_land);
             size_t to_write_land = strlen(request_land);
@@ -574,6 +561,8 @@ int run()
                 ret = OS_Socket_write(hServer, request_land, to_write_land, &actualLen_land);
             } while (ret == OS_ERROR_WOULD_BLOCK);
 
+            // while(accel_gyro_data(&accelX, &accelY, &accelZ, &gyroX, &gyroY, &gyroZ) != 'L'){}
+
             /**
              * @todo the break should be changed to something else later
              *
@@ -582,7 +571,7 @@ int run()
         }
         else
         { /*else fly in vertical direction*/
-            printf("Fly in vertical direction\r\n");
+            // printf("Fly in vertical direction\r\n");
 
             // if there is lidar points, record it for the landing destination
             if (lidar_points_len > 10)
@@ -631,17 +620,45 @@ int run()
                     blocks[block_number].z = -cur_pos[2];
                     blocks[block_number].number = 1;
                     block_number += 1;
-                    printf("number of blocks: %d\n", block_number);
+                    // printf("number of blocks: %d\n", block_number);
                 }
             }
 
-            runDemo();
+            accel_gyro_flag = accel_gyro_data(&accelX, &accelY, &accelZ, &gyroX, &gyroY, &gyroZ);
 
-            do
+            if(accel_gyro_flag == 'F')
             {
-                seL4_Yield();
-                ret = OS_Socket_write(hServer, request_up, to_write_up, &actualLen_up);
-            } while (ret == OS_ERROR_WOULD_BLOCK);
+                const char request_fast[] = "FAST\r\n";
+                size_t actualLen_fast = sizeof(request_fast);
+                size_t to_write_fast = strlen(request_fast);
+                do
+                {
+                    seL4_Yield();
+                    ret = OS_Socket_write(hServer, request_fast, to_write_fast, &actualLen_fast);
+                } while (ret == OS_ERROR_WOULD_BLOCK);
+            }
+            else if(accel_gyro_flag == 'S')
+            {
+                const char request_slow[] = "SLOW\r\n";
+                size_t actualLen_slow = sizeof(request_slow);
+                size_t to_write_slow = strlen(request_slow);
+                do
+                {
+                    seL4_Yield();
+                    ret = OS_Socket_write(hServer, request_slow, to_write_slow, &actualLen_slow);
+                } while (ret == OS_ERROR_WOULD_BLOCK);
+            }
+            else
+            {
+                const char request_keep[] = "KEEP\r\n";
+                size_t actualLen_keep = sizeof(request_keep);
+                size_t to_write_keep = strlen(request_keep);
+                do
+                {
+                    seL4_Yield();
+                    ret = OS_Socket_write(hServer, request_keep, to_write_keep, &actualLen_keep);
+                } while (ret == OS_ERROR_WOULD_BLOCK);
+            }
         }
 
         strcpy(very_long_tmp, "");
