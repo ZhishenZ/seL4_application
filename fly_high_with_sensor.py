@@ -7,7 +7,8 @@ import argparse
 import numpy
 from numpy import linalg as LA
 
-VERTICAL_SPEED = 0.04
+# vertical speed, initially set to 0.04, can change from 0.01 to 0.2
+VERTICAL_SPEED = 0.04  
 
 
 ## for the test
@@ -41,26 +42,28 @@ class LidarTest:
 
     def execute(self):
 
+        ## arm the drone
         print("arming the drone...\n")
         self.client.armDisarm(True)
         time.sleep(1)
 
+        ## take off
         # airsim.wait_key('Press any key to takeoff')
-        print("Take off after 3 seconds...\n")
-        time.sleep(3)
+        print("Take off now...\n")
         self.client.takeoffAsync().join()
 
+        ## ready to fly high
         # airsim.wait_key('Press any key to get Lidar readings')
-        print("Fly up after 3 seconds...")
-        time.sleep(3)
+        print("Ready...")
+        time.sleep(1)
         
         
         # z_position = -10
         
         while(True):
             
+            ## get the lidar points, reshape the data
             lidarData = self.client.getLidarData()
-            # get the lidar points
             points = self.parse_lidarData(lidarData)
             cur_pos = np.array([[lidarData.pose.position.x_val, lidarData.pose.position.y_val, lidarData.pose.position.z_val]])
 
@@ -72,34 +75,37 @@ class LidarTest:
                 break
             # print("recv:",data_recv)
 
+
+            ## --------------- analyzing the feedback from the TestApp STARTS ---------------
+            
             global VERTICAL_SPEED
 
-            # 'K' stands for keep the currecnt speed
+            ## 'K' stands for keep the currecnt speed
             if str(data_recv)[2] == 'K':
                 self.client.moveByVelocityAsync(0, 0, -VERTICAL_SPEED/0.025, 0.025)
                 print("current speed: ", round(VERTICAL_SPEED,3))
 
-            # 'F' stands for fast
+            ## 'F' stands for making the drone move faster
             elif str(data_recv)[2] == 'F':
                 
                 if(VERTICAL_SPEED<0.2):
-                    VERTICAL_SPEED += 0.005
+                    VERTICAL_SPEED += 0.01
                 else:
                     VERTICAL_SPEED = 0.2
                 self.client.moveByVelocityAsync(0, 0, -VERTICAL_SPEED/0.025, 0.025)
                 print("current speed: ", round(VERTICAL_SPEED,3))
             
-            # 'S' stands for slow
+            ## 'S' stands for making the drone move slower
             elif str(data_recv)[2] == 'S':
                 
                 if(VERTICAL_SPEED>0.01):
-                    VERTICAL_SPEED -= 0.005
+                    VERTICAL_SPEED -= 0.01
                 else:
                     VERTICAL_SPEED = 0.01
                 self.client.moveByVelocityAsync(0, 0, -VERTICAL_SPEED/0.025, 0.025)
                 print("current speed: ", round(VERTICAL_SPEED,3))
             
-            # 'L' stands for landing
+            ## 'L' stands for landing
             elif str(data_recv)[2] == 'L':
                 
                 destination = re.findall(r"[-+]?\d*\.?\d+|[-+]?\d+", str(data_recv))
@@ -109,10 +115,6 @@ class LidarTest:
                 time.sleep(2)
                 self.client.moveToPositionAsync(float(destination[0]),float(destination[1]),float(destination[2]),5).join()
                 # self.fly_to_destination(float(destination[0]),float(destination[1]),float(destination[2]))
-                # self.client.moveToPositionAsync(lidarData.pose.position.x_val+float(destination[0]), 
-                #                                 lidarData.pose.position.y_val+float(destination[1]), 
-                #                                 lidarData.pose.position.z_val,
-                #                                 5).join()
                 
                 # airsim.wait_key("press any key to land")
                 print("Land after 5 seconds...")
@@ -120,18 +122,18 @@ class LidarTest:
                 self.client.landAsync().join()
                 break
 
+            ## --------------- analyzing the feedback from the TestApp ENDS ---------------
 
 
-
-            # Send to the Raspberry Pi 
+            ## Send to the Raspberry Pi 
             ## cast the lidar points and send data to the raspberry
             data_str = str(np.around(points,6)) + str(np.around(cur_pos,6))
             data_str += "\0"
             
-            #  uncomment this if print the lidar data
+            ##  uncomment this if print the lidar data
             # print("Print the lidar data\n",data_str)
             
-            # TODO the print can be deleted later 
+            ## TODO the print can be deleted later 
             # print("The lidar data length is {}\n".format(len(points)))
             
             conn.send(data_str.encode())
@@ -141,7 +143,7 @@ class LidarTest:
 
     def parse_lidarData(self, data):
 
-        # reshape array of floats to array of [X,Y,Z]
+        ## reshape array of floats to array of [X,Y,Z]
         points = numpy.array(data.point_cloud, dtype=numpy.dtype('f4'))
         points = numpy.reshape(points, (int(points.shape[0]/3), 3))
        
@@ -150,11 +152,15 @@ class LidarTest:
     def stop(self):
 
         # airsim.wait_key('Press any key to reset to original state')
-        print("Reset to Original State after 10 seconds...")
-        time.sleep(10)
+        print("Reset to Original State after 5 seconds...")
+        time.sleep(5)
 
         self.client.armDisarm(False)
         self.client.reset()
+        conn.send(b'FINISH\r\n')
+
+        time.sleep(2)
+        conn.close()
 
         self.client.enableApiControl(False)
         print("Done!\n")

@@ -34,7 +34,7 @@ sudo sdk/scripts/open_trentos_build_env.sh sdk/build-system.sh sdk/demos/demo_tu
 #define POINT_CLOUD_NUM 3 * 500
 #define POINT_CLOUD_SIZE sizeof(double) * 3 * 500
 #define NOT_A_NUM (__builtin_nanf(""))
-#define DISTANCE_THRESHOLD 30*30
+#define DISTANCE_THRESHOLD 33*33
 
 static char fileData[4096];
 static const if_OS_Socket_t networkStackCtx = IF_OS_SOCKET_ASSIGN(networkStack);
@@ -131,6 +131,22 @@ OS_Error_t run_i2c(void)
     return err;
 }
 // ----------------------------- mpu6050-related events END ------------------------------------
+
+
+void bubble_sort(struct block blocks[], int block_length)
+{
+    struct block temp;
+    for (int i = 0; i < block_length - 1; ++i)
+        for (int j = i + 1; j < block_length; ++j)
+        {
+            if (blocks[i].z <= blocks[j].z) 
+            {
+                temp = blocks[i];
+                blocks[i] = blocks[j];
+                blocks[j] = temp;
+            }
+        }
+}
 
 
 //------------------------------------------------------------------------------
@@ -465,7 +481,7 @@ int run()
         OS_Socket_close(hServer);
         return -1;
     }
-    printf("HTTP request successfully sent");
+    // printf("HTTP request successfully sent");
 
     /**
      * @todo put these variables somewhere else
@@ -531,11 +547,6 @@ int run()
              * @todo temporarily print the stored data points
              *
              */
-            for (int i = 0; i < block_number; i++)
-            {
-
-                printf("Block %d  x:%f y:%f height:%f number: %d\n", (i + 1), blocks[i].x, blocks[i].y, blocks[i].z, blocks[i].number);
-            }
 
             // calculate the mean of the relative x and y value
             double cur_x = 0;
@@ -548,20 +559,38 @@ int run()
             cur_x /= pre_lidar_points_len;
             cur_y /= pre_lidar_points_len;
 
-            // send the landing infomation to the drone.
-            // slightly modify the destination by avoiding landing outside.
-            sprintf(str_tem, "%f %f %f\r\n", (cur_x*1.03)+cur_pos[0], (cur_y*1.03)+cur_pos[1],cur_pos[2]-1);
+            
+            /* slightly modify the destination to avoid landing deviation */
+            sprintf(str_tem, "%f %f %f\r\n", (cur_x*1.02)+cur_pos[0], (cur_y*1.02)+cur_pos[1],cur_pos[2]-1);
             strcat(request_land, str_tem);
             size_t actualLen_land = sizeof(request_land);
             size_t to_write_land = strlen(request_land);
 
+            /* send the landing infomation to the drone */
             do
             {
                 seL4_Yield();
                 ret = OS_Socket_write(hServer, request_land, to_write_land, &actualLen_land);
             } while (ret == OS_ERROR_WOULD_BLOCK);
 
-            // while(accel_gyro_data(&accelX, &accelY, &accelZ, &gyroX, &gyroY, &gyroZ) != 'L'){}
+            /* wait for the "FINISH" message from the server */
+            do
+            {
+                ret = OS_Socket_read(
+                hServer,
+                receivedData,
+                sizeof(receivedData),
+                &actualLenRecv);
+            } while (actualLenRecv <= 4);
+
+            /* sort the block heights */
+            bubble_sort(blocks, block_number);
+
+            /* print the sorted block heights */
+            for (int i = 0; i < block_number; i++)
+            {
+                printf("Block %d  x:%f y:%f height:%f number: %d\n", (i + 1), blocks[i].x, blocks[i].y, blocks[i].z, blocks[i].number);
+            }
 
             /**
              * @todo the break should be changed to something else later
@@ -624,9 +653,13 @@ int run()
                 }
             }
 
+            /* ----------------- get, handle the accel/gyro data START ------------------*/
+
+            /* read the accel/gyro data, get the command */
             accel_gyro_flag = accel_gyro_data(&accelX, &accelY, &accelZ, &gyroX, &gyroY, &gyroZ);
 
-            if(accel_gyro_flag == 'F')
+            /* handle the command */
+            if(accel_gyro_flag == 'F')  // talk to the drone to move faster
             {
                 const char request_fast[] = "FAST\r\n";
                 size_t actualLen_fast = sizeof(request_fast);
@@ -637,7 +670,7 @@ int run()
                     ret = OS_Socket_write(hServer, request_fast, to_write_fast, &actualLen_fast);
                 } while (ret == OS_ERROR_WOULD_BLOCK);
             }
-            else if(accel_gyro_flag == 'S')
+            else if(accel_gyro_flag == 'S') // talk to the drone to move slower
             {
                 const char request_slow[] = "SLOW\r\n";
                 size_t actualLen_slow = sizeof(request_slow);
@@ -648,7 +681,7 @@ int run()
                     ret = OS_Socket_write(hServer, request_slow, to_write_slow, &actualLen_slow);
                 } while (ret == OS_ERROR_WOULD_BLOCK);
             }
-            else
+            else // talk to the drone to keep the speed unchanged
             {
                 const char request_keep[] = "KEEP\r\n";
                 size_t actualLen_keep = sizeof(request_keep);
@@ -661,11 +694,20 @@ int run()
             }
         }
 
+        /* ----------------- get, handle the accel/gyro data END ------------------*/
+
         strcpy(very_long_tmp, "");
         string_good = 1;
         actualLenRecv = 0;
         memset(receivedData, 0, sizeof(receivedData));
     }
+
+    /* wait */
+    for (int i = 0; i < 100000 * 2000; i++)
+    {
+        __asm__("nop");
+    }
+
 
     OS_Socket_close(hServer);
 
