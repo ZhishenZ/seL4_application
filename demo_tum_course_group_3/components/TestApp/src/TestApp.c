@@ -73,8 +73,9 @@ double euclidean_distance(double x1, double y1, double x2, double y2)
  */
 uint16_t accelX, accelY, accelZ;
 uint16_t gyroX, gyroY, gyroZ;
-char accel_gyro_flag = 'K';
-char accel_gyro_data(uint16_t *accelX, uint16_t *accelY, uint16_t *accelZ, uint16_t *gyroX, uint16_t *gyroY, uint16_t *gyroZ)
+char feedback = 'K'; // a "command" that can control the speed of the drone
+
+char get_feedback_from_accel_gyro(uint16_t *accelX, uint16_t *accelY, uint16_t *accelZ, uint16_t *gyroX, uint16_t *gyroY, uint16_t *gyroZ)
 {
     mpu6050_rpc_get_data(accelX, accelY, accelZ, gyroX, gyroY, gyroZ);
     /* printf("TestApp.c: accel_X=%d, accelY=%d, accelZ=%d, gyro_X=%d, gyroY=%d, gyroZ=%d\n", \
@@ -527,7 +528,7 @@ int run()
         }
 
         lidar_points_len = tokenize_string(very_long_tmp, " ,[]\n", lidar_points,cur_pos);
-        // printf("The lidar data length is: %d\r\n", lidar_points_len);
+        printf("The number of detected points is: %d\r\n", lidar_points_len);
         // printf("Got HTTP Page:\n%s\r\n", very_long_tmp);
 
         if (lidar_points_len == 0)
@@ -655,11 +656,11 @@ int run()
 
             /* ----------------- get, handle the accel/gyro data START ------------------*/
 
-            /* read the accel/gyro data, get the command */
-            accel_gyro_flag = accel_gyro_data(&accelX, &accelY, &accelZ, &gyroX, &gyroY, &gyroZ);
+            /* read the accel/gyro data, get the feedback */
+            feedback = get_feedback_from_accel_gyro(&accelX, &accelY, &accelZ, &gyroX, &gyroY, &gyroZ);
 
-            /* handle the command */
-            if(accel_gyro_flag == 'F')  // talk to the drone to move faster
+            /* send the feedback to the Python script */
+            if(feedback == 'F')  // talk to the drone to move faster
             {
                 const char request_fast[] = "FAST\r\n";
                 size_t actualLen_fast = sizeof(request_fast);
@@ -670,7 +671,7 @@ int run()
                     ret = OS_Socket_write(hServer, request_fast, to_write_fast, &actualLen_fast);
                 } while (ret == OS_ERROR_WOULD_BLOCK);
             }
-            else if(accel_gyro_flag == 'S') // talk to the drone to move slower
+            else if(feedback == 'S') // talk to the drone to move slower
             {
                 const char request_slow[] = "SLOW\r\n";
                 size_t actualLen_slow = sizeof(request_slow);

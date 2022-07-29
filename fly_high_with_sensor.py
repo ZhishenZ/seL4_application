@@ -120,6 +120,9 @@ class LidarTest:
                 print("Land after 5 seconds...")
                 time.sleep(5)
                 self.client.landAsync().join()
+
+                # tell the TestApp that the demo finishes.
+                conn.send(b'FINISH\r\n')
                 break
 
             ## --------------- analyzing the feedback from the TestApp ENDS ---------------
@@ -157,7 +160,6 @@ class LidarTest:
 
         self.client.armDisarm(False)
         self.client.reset()
-        conn.send(b'FINISH\r\n')
 
         time.sleep(2)
         conn.close()
